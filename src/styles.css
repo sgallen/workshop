@@ -9,6 +9,8 @@
   --accent-strong: #8c3415;
   --pill: #f4dcc9;
   --shadow: 0 18px 40px rgba(74, 45, 29, 0.08);
+  --composer-offset: 136px;
+  --viewport-offset: 0px;
   font-family: Georgia, "Times New Roman", serif;
 }
 
@@ -23,6 +25,7 @@ body {
     radial-gradient(circle at top, rgba(180, 81, 45, 0.08), transparent 35%),
     linear-gradient(180deg, #fbf7f0 0%, var(--bg) 100%);
   color: var(--ink);
+  scroll-behavior: smooth;
 }
 
 button,
@@ -35,10 +38,10 @@ select {
 .app-shell {
   width: min(100%, 920px);
   margin: 0 auto;
-  padding: 20px 14px 40px;
+  padding: 10px 14px calc(var(--composer-offset) + 24px);
 }
 
-.hero-card,
+.app-toolbar,
 .artifact-card {
   background: color-mix(in srgb, var(--paper) 92%, white 8%);
   border: 1px solid rgba(216, 201, 182, 0.9);
@@ -46,13 +49,20 @@ select {
   box-shadow: var(--shadow);
 }
 
-.hero-card {
-  padding: 24px 18px;
+.app-toolbar {
+  display: grid;
+  gap: 14px;
+  padding: 12px 14px;
+}
+
+.path-form {
+  margin: 0;
 }
 
 .eyebrow,
 .artifact-kicker,
-.comment-author {
+.comment-author,
+.section-label {
   margin: 0 0 10px;
   color: var(--accent-strong);
   font-family: "Trebuchet MS", sans-serif;
@@ -62,7 +72,6 @@ select {
   text-transform: uppercase;
 }
 
-.hero-card h1,
 .artifact-card h2,
 .artifact-preview h3,
 .artifact-preview h4,
@@ -71,29 +80,91 @@ select {
   line-height: 1.05;
 }
 
-.hero-card h1 {
-  font-size: clamp(2rem, 8vw, 3.4rem);
-  max-width: 12ch;
+.toolbar-copy {
+  min-width: 0;
 }
 
-.lede {
-  margin: 16px 0 0;
-  max-width: 34rem;
+.toolbar-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+.toolbar-meta {
+  margin: 4px 0 0;
   color: var(--muted);
-  font-size: 1.05rem;
-  line-height: 1.55;
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 0.9rem;
+  line-height: 1.4;
+}
+
+.toolbar-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.path-row {
+  display: grid;
+  gap: 10px;
+}
+
+.path-input,
+.composer-input {
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  padding: 14px 16px;
+}
+
+.path-input {
+  min-height: 44px;
+}
+
+.composer-input {
+  flex: 1 1 auto;
+  min-height: 40px;
+  resize: none;
+  padding: 9px 14px;
+  line-height: 1.35;
+  overflow-y: hidden;
 }
 
 .artifact-card {
   margin-top: 18px;
-  padding: 18px;
+  padding: 16px;
 }
 
-.artifact-header {
+.artifact-reader {
+  margin-top: 12px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+}
+
+.reader-bar {
+  position: sticky;
+  top: 8px;
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
-  gap: 16px;
+  justify-content: flex-start;
+  z-index: 20;
+  margin-top: 2px;
+  padding: 0;
+  pointer-events: none;
+}
+
+.reader-nav-button {
+  pointer-events: auto;
+  border-radius: 999px;
+  background: rgba(255, 250, 242, 0.78);
+  box-shadow: 0 10px 24px rgba(74, 45, 29, 0.08);
+  backdrop-filter: blur(10px);
 }
 
 .status-pill {
@@ -110,61 +181,349 @@ select {
   padding: 0 14px;
 }
 
-.artifact-body {
+.nav-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(31, 26, 23, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms ease;
+  z-index: 29;
+}
+
+.nav-overlay-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.nav-drawer {
+  position: fixed;
+  inset: 0 auto 0 0;
+  width: min(86vw, 320px);
+  padding: 16px 14px;
+  background: color-mix(in srgb, var(--paper) 96%, white 4%);
+  box-shadow: 18px 0 40px rgba(74, 45, 29, 0.12);
+  transform: translateX(-100%);
+  transition: transform 180ms ease;
+  z-index: 30;
+  overflow-y: auto;
+}
+
+.nav-drawer-open {
+  transform: translateX(0);
+}
+
+.nav-drawer-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.nav-drawer-list {
   display: grid;
-  gap: 16px;
-  margin-top: 18px;
+  gap: 8px;
+  margin-top: 14px;
 }
 
-.artifact-preview,
-.comment-panel {
+.nav-drawer-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
   border: 1px solid var(--line);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.64);
-  padding: 18px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 12px 14px;
+  text-decoration: none;
 }
 
-.artifact-preview p,
+.section-list {
+  display: block;
+  margin-top: 2px;
+  padding-bottom: max(24px, calc(var(--composer-offset) - 56px));
+}
+
+.section-card {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  scroll-margin-top: 78px;
+}
+
+.section-card + .section-card {
+  margin-top: 8px;
+}
+
+.section-card[data-attached='true'] .section-rendered > :first-child {
+  color: var(--accent-strong);
+}
+
+.section-rendered {
+  margin-top: 0;
+}
+
+.section-rendered h1,
+.section-rendered h2,
+.section-rendered h3,
+.section-rendered h4,
+.section-rendered h5,
+.section-rendered h6 {
+  display: inline-block;
+  line-height: 1.15;
+  cursor: pointer;
+  transition:
+    color 120ms ease,
+    background-color 120ms ease,
+    box-shadow 120ms ease;
+  border-radius: 8px;
+  box-shadow: inset 0 0 0 1px transparent;
+}
+
+.section-rendered h1:hover,
+.section-rendered h2:hover,
+.section-rendered h3:hover,
+.section-rendered h4:hover,
+.section-rendered h5:hover,
+.section-rendered h6:hover {
+  color: var(--accent-strong);
+}
+
+.section-card[data-attached='true'] .section-rendered h1,
+.section-card[data-attached='true'] .section-rendered h2,
+.section-card[data-attached='true'] .section-rendered h3,
+.section-card[data-attached='true'] .section-rendered h4,
+.section-card[data-attached='true'] .section-rendered h5,
+.section-card[data-attached='true'] .section-rendered h6 {
+  background: rgba(244, 220, 201, 0.5);
+  box-shadow: inset 0 0 0 1px rgba(180, 81, 45, 0.18);
+}
+
+.section-rendered p,
+.section-rendered li,
 .comment-thread p {
   color: var(--muted);
   font-size: 1rem;
   line-height: 1.6;
 }
 
+.section-rendered pre,
+.section-rendered code {
+  overflow-x: auto;
+}
+
+.thread-list {
+  margin-top: 10px;
+}
+
+.section-notes {
+  margin-top: 8px;
+  padding-left: 14px;
+  border-left: 2px solid rgba(180, 81, 45, 0.28);
+}
+
+.section-notes summary {
+  color: var(--muted);
+  cursor: pointer;
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+}
+
+.section-notes[open] summary {
+  margin-bottom: 8px;
+}
+
+.text-button {
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 0.92rem;
+  font-weight: 700;
+  padding: 0;
+}
+
+.icon-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 32px;
+  min-height: 32px;
+  border: 1px solid rgba(216, 201, 182, 0.95);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--accent-strong);
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0;
+}
+
+.composer-dock {
+  position: fixed;
+  left: 50%;
+  bottom: 0;
+  transform: translateX(-50%) translateY(calc(-1 * var(--viewport-offset)));
+  width: min(100%, 920px);
+  z-index: 28;
+  border-top: 1px solid rgba(216, 201, 182, 0.85);
+  border-left: 0;
+  border-right: 0;
+  border-bottom: 0;
+  border-radius: 0;
+  background: rgba(251, 247, 240, 0.94);
+  box-shadow: 0 -8px 28px rgba(74, 45, 29, 0.08);
+  backdrop-filter: blur(16px);
+  padding: 6px 10px calc(6px + env(safe-area-inset-bottom));
+}
+
+.composer-context {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-height: 0;
+  margin-bottom: 8px;
+}
+
+.context-chip,
+.context-subtle {
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 0.88rem;
+}
+
+.context-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  border-radius: 999px;
+  background: var(--pill);
+  color: var(--accent-strong);
+  padding: 0 10px;
+  font-weight: 700;
+}
+
+.context-subtle {
+  color: var(--muted);
+}
+
+.composer-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.composer-attach {
+  flex: 0 0 auto;
+  margin-bottom: 0;
+}
+
+.composer-submit {
+  width: 40px;
+  min-width: 40px;
+  max-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  flex: 0 0 auto;
+  padding: 0;
+}
+
+.composer-submit.primary-button {
+  width: 40px;
+}
+
 .comment-thread {
   border-left: 4px solid var(--accent);
-  margin: 14px 0 18px;
+  margin: 10px 0 0;
   padding-left: 12px;
+}
+
+.comment-timestamp,
+.empty-thread,
+.error-banner {
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.5;
 }
 
 .primary-button {
   width: 100%;
-  min-height: 52px;
+  min-height: 40px;
   border: 0;
-  border-radius: 14px;
+  border-radius: 999px;
   background: linear-gradient(180deg, var(--accent) 0%, var(--accent-strong) 100%);
   color: #fff8f2;
   font-family: "Trebuchet MS", sans-serif;
   font-size: 1rem;
   font-weight: 700;
-  padding: 0 16px;
+  padding: 0;
+}
+
+.secondary-button {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  color: var(--ink);
+  font-family: "Trebuchet MS", sans-serif;
+  font-size: 0.95rem;
+  font-weight: 700;
+  padding: 0 18px;
+}
+
+.compact-button {
+  min-height: 40px;
+  font-size: 0.92rem;
+  padding: 0 14px;
+}
+
+.primary-button:disabled {
+  opacity: 0.7;
+}
+
+.error-banner {
+  margin: 16px 0 0;
+  border: 1px solid rgba(180, 81, 45, 0.35);
+  border-radius: 14px;
+  background: rgba(255, 242, 235, 0.95);
+  color: var(--accent-strong);
+  padding: 14px 16px;
 }
 
 @media (min-width: 760px) {
   .app-shell {
-    padding: 36px 24px 60px;
+    padding: 12px 24px 132px;
   }
 
-  .hero-card {
-    padding: 32px 28px;
+  .app-toolbar {
+    grid-template-columns: minmax(0, 1fr) minmax(320px, 420px);
+    align-items: center;
+    padding: 14px 16px;
   }
 
   .artifact-card {
-    padding: 24px;
+    padding: 20px;
   }
 
-  .artifact-body {
-    grid-template-columns: minmax(0, 1.5fr) minmax(280px, 0.9fr);
-    align-items: start;
+  .nav-drawer {
+    width: min(360px, 32vw);
+    padding: 18px 16px;
+  }
+
+  .composer-dock {
+    padding: 10px 18px calc(10px + env(safe-area-inset-bottom));
+  }
+
+  .composer-row {
+    align-items: end;
+  }
+
+  .path-row {
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 }

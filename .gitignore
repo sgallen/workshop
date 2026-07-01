@@ -6,3 +6,4 @@ dist/
 coverage/
 .wrangler/
 *.tsbuildinfo
+.workshop-data/
