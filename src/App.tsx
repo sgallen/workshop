@@ -1,4 +1,4 @@
-import { FormEvent, MouseEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { FormEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 
 type Comment = {
   id: string;
@@ -66,13 +66,6 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
   }
 }
 
-function formatShortTimestamp(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(new Date(value));
-}
-
 function formatRecentDate(value: string) {
   return new Intl.DateTimeFormat(undefined, {
     month: 'short',
@@ -99,6 +92,15 @@ export function App() {
   }, []);
 
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
+  const composerFrameRef = useRef<HTMLFormElement | null>(null);
+  const threadRef = useRef<HTMLDivElement | null>(null);
+  const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const viewportMetricsRef = useRef({
+    height: window.innerHeight,
+    offsetTop: 0
+  });
+  const focusFollowTimeoutRef = useRef<number | null>(null);
+  const focusFollowFrameRef = useRef<number | null>(null);
   const [artifactPath, setArtifactPath] = useState(initialPath);
   const [draftPath, setDraftPath] = useState(initialPath);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
@@ -110,9 +112,55 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [attachedSectionId, setAttachedSectionId] = useState<string | null>(null);
-  const [checkingUpdates, setCheckingUpdates] = useState(false);
+  const [manuallyRefreshing, setManuallyRefreshing] = useState(false);
   const [hasRemoteUpdate, setHasRemoteUpdate] = useState(false);
   const [lastLoadedUpdatedAt, setLastLoadedUpdatedAt] = useState<string | null>(null);
+
+  function scrollThreadToBottom() {
+    const thread = threadRef.current;
+
+    if (!thread) {
+      return;
+    }
+
+    thread.scrollTop = thread.scrollHeight;
+    threadEndRef.current?.scrollIntoView({ block: 'end' });
+    composerFrameRef.current?.scrollIntoView({ block: 'end' });
+  }
+
+  function stopComposerFocusFollow() {
+    if (focusFollowTimeoutRef.current !== null) {
+      window.clearTimeout(focusFollowTimeoutRef.current);
+      focusFollowTimeoutRef.current = null;
+    }
+
+    if (focusFollowFrameRef.current !== null) {
+      window.cancelAnimationFrame(focusFollowFrameRef.current);
+      focusFollowFrameRef.current = null;
+    }
+  }
+
+  function startComposerFocusFollow() {
+    stopComposerFocusFollow();
+
+    const startedAt = window.performance.now();
+    const follow = () => {
+      scrollThreadToBottom();
+
+      if (window.performance.now() - startedAt >= 900) {
+        focusFollowFrameRef.current = null;
+        return;
+      }
+
+      focusFollowFrameRef.current = window.requestAnimationFrame(follow);
+    };
+
+    focusFollowFrameRef.current = window.requestAnimationFrame(follow);
+    focusFollowTimeoutRef.current = window.setTimeout(() => {
+      stopComposerFocusFollow();
+      scrollThreadToBottom();
+    }, 950);
+  }
 
   const sectionById = useMemo(() => {
     return new Map((artifact?.sections ?? []).map((section) => [section.id, section]));
@@ -121,7 +169,9 @@ export function App() {
   const attachedSection = attachedSectionId ? sectionById.get(attachedSectionId) ?? null : null;
   const conversationComments = artifact?.comments ?? [];
   const resolvedArtifactPath = artifact?.relativePath ?? artifactPath;
-  const isPanelOpen = menuOpen || railOpen;
+  const showOverlay = menuOpen || railOpen;
+  const interactiveOverlay = menuOpen;
+  const showComposerUtilityRow = Boolean(attachedSection || hasRemoteUpdate);
   const displayedRecentArtifacts = useMemo(() => {
     if (!artifact) {
       if (recentArtifacts.length >= 3) {
@@ -207,6 +257,12 @@ export function App() {
   }, [composerBody, railOpen]);
 
   useEffect(() => {
+    return () => {
+      stopComposerFocusFollow();
+    };
+  }, []);
+
+  useEffect(() => {
     if (!artifact || !railOpen) {
       return;
     }
@@ -223,7 +279,7 @@ export function App() {
   }, [artifactPath, artifact, railOpen, lastLoadedUpdatedAt]);
 
   useEffect(() => {
-    if (!isPanelOpen) {
+    if (!menuOpen) {
       return;
     }
 
@@ -249,7 +305,74 @@ export function App() {
       documentElement.style.overflow = previousHtmlOverflow;
       window.scrollTo(0, scrollY);
     };
-  }, [isPanelOpen]);
+  }, [menuOpen]);
+
+  useEffect(() => {
+    const syncViewportHeight = () => {
+      const visualViewport = window.visualViewport;
+      const viewportHeight = visualViewport?.height ?? window.innerHeight;
+      const viewportOffsetTop = visualViewport?.offsetTop ?? 0;
+      const thread = threadRef.current;
+      const distanceFromBottom = thread
+        ? Math.max(0, thread.scrollHeight - thread.scrollTop - thread.clientHeight)
+        : 0;
+      const previousMetrics = viewportMetricsRef.current;
+      const composerHasFocus = document.activeElement === composerRef.current;
+      const keyboardResize =
+        composerHasFocus &&
+        (viewportHeight < previousMetrics.height - 24 || viewportOffsetTop !== previousMetrics.offsetTop);
+
+      document.documentElement.style.setProperty('--app-viewport-height', `${viewportHeight}px`);
+      document.documentElement.style.setProperty('--app-viewport-offset-top', `${viewportOffsetTop}px`);
+      viewportMetricsRef.current = {
+        height: viewportHeight,
+        offsetTop: viewportOffsetTop
+      };
+
+      if (!thread) {
+        return;
+      }
+
+      window.requestAnimationFrame(() => {
+        const currentThread = threadRef.current;
+
+        if (!currentThread) {
+          return;
+        }
+
+        if (keyboardResize) {
+          scrollThreadToBottom();
+          return;
+        }
+
+        const maxScrollTop = Math.max(0, currentThread.scrollHeight - currentThread.clientHeight);
+        currentThread.scrollTop = Math.max(0, Math.min(maxScrollTop, maxScrollTop - distanceFromBottom));
+      });
+    };
+
+    syncViewportHeight();
+
+    const visualViewport = window.visualViewport;
+    window.addEventListener('resize', syncViewportHeight);
+    visualViewport?.addEventListener('resize', syncViewportHeight);
+    visualViewport?.addEventListener('scroll', syncViewportHeight);
+
+    return () => {
+      window.removeEventListener('resize', syncViewportHeight);
+      visualViewport?.removeEventListener('resize', syncViewportHeight);
+      visualViewport?.removeEventListener('scroll', syncViewportHeight);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!railOpen) {
+      return;
+    }
+
+    window.requestAnimationFrame(() => {
+      scrollThreadToBottom();
+    });
+  }, [railOpen, conversationComments.length]);
 
   async function loadRecents() {
     try {
@@ -296,12 +419,14 @@ export function App() {
     }
   }
 
-  async function checkForRemoteUpdate() {
+  async function checkForRemoteUpdate(showButtonFeedback = false) {
     if (!resolvedArtifactPath || !lastLoadedUpdatedAt) {
       return;
     }
 
-    setCheckingUpdates(true);
+    if (showButtonFeedback) {
+      setManuallyRefreshing(true);
+    }
 
     try {
       const response = await fetch(`/api/artifact/meta?path=${encodeURIComponent(resolvedArtifactPath)}`);
@@ -315,7 +440,9 @@ export function App() {
     } catch {
       setHasRemoteUpdate(false);
     } finally {
-      setCheckingUpdates(false);
+      if (showButtonFeedback) {
+        setManuallyRefreshing(false);
+      }
     }
   }
 
@@ -396,16 +523,50 @@ export function App() {
     setRailOpen(false);
   }
 
+  function preventPanelDismiss(event: MouseEvent<HTMLElement>) {
+    event.stopPropagation();
+  }
+
+  function handleComposerFocus() {
+    startComposerFocusFollow();
+  }
+
+  function handleComposerBlur() {
+    stopComposerFocusFollow();
+  }
+
+  function handleOverlayPointerDown(event: PointerEvent<HTMLDivElement>) {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    handleDismissPanels();
+  }
+
+  function handleReaderSurfacePointerDown(event: PointerEvent<HTMLElement>) {
+    if (!railOpen) {
+      return;
+    }
+
+    const target = event.target;
+
+    if (target instanceof Element && target.closest('.discussion-rail')) {
+      return;
+    }
+
+    setRailOpen(false);
+  }
+
   return (
     <main className={`app-shell${menuOpen ? ' app-shell-menu-open' : ''}`}>
       <div
-        className={`shell-overlay${isPanelOpen ? ' shell-overlay-open' : ''}`}
-        onClick={handleDismissPanels}
-        aria-hidden={isPanelOpen ? 'false' : 'true'}
+        className={`shell-overlay${showOverlay ? ' shell-overlay-open' : ''}${interactiveOverlay ? ' shell-overlay-interactive' : ''}`}
+        onPointerDown={interactiveOverlay ? handleOverlayPointerDown : undefined}
+        aria-hidden={showOverlay ? 'false' : 'true'}
       />
 
       <aside className={`workspace-menu${menuOpen ? ' workspace-menu-open' : ''}`} aria-label="Workshop navigation">
-        <div className="workspace-menu-panel">
+        <div className="workspace-menu-panel" onPointerDown={preventPanelDismiss} onClick={preventPanelDismiss}>
           <div className="workspace-menu-header">
             <div className="workspace-brand-lockup">
               <div className="workspace-logo-mark" aria-hidden="true">W</div>
@@ -505,7 +666,7 @@ export function App() {
 
         {artifact ? (
           <>
-            <header className="reader-bar">
+            <header className="reader-bar" onPointerDown={handleReaderSurfacePointerDown}>
               <div className="reader-bar-row">
                 <div className="reader-bar-leading">
                   <button className="secondary-button compact-button icon-button menu-trigger" type="button" onClick={() => {
@@ -547,7 +708,10 @@ export function App() {
               ) : null}
             </header>
 
-            <div className={`reader-layout${railOpen ? ' reader-layout-with-rail' : ''}`}>
+            <div
+              className={`reader-layout${railOpen ? ' reader-layout-with-rail' : ''}`}
+              onPointerDown={handleReaderSurfacePointerDown}
+            >
               <section className="artifact-card artifact-reader">
                 <div className="section-list">
                   {artifact.sections.map((section) => (
@@ -567,17 +731,22 @@ export function App() {
                 </div>
               </section>
 
-              <aside className={`discussion-rail${railOpen ? ' discussion-rail-open' : ''}`} aria-label="Discussion">
+              <aside
+                className={`discussion-rail${railOpen ? ' discussion-rail-open' : ''}`}
+                aria-label="Discussion"
+                onPointerDown={preventPanelDismiss}
+                onClick={preventPanelDismiss}
+              >
                 <div className="discussion-rail-panel">
                   <div className="discussion-rail-header">
                     <div className="discussion-header-actions">
                       <button
                         className="secondary-button compact-button discussion-header-button"
                         type="button"
-                        onClick={() => void checkForRemoteUpdate()}
-                        disabled={checkingUpdates}
+                        onClick={() => void checkForRemoteUpdate(true)}
+                        disabled={manuallyRefreshing}
                       >
-                        {checkingUpdates ? 'Refreshing...' : 'Refresh'}
+                        {manuallyRefreshing ? 'Refreshing...' : 'Refresh'}
                       </button>
                       <button
                         className="workspace-menu-close"
@@ -590,7 +759,7 @@ export function App() {
                     </div>
                   </div>
 
-                  <div className="discussion-thread">
+                  <div className="discussion-thread" ref={threadRef}>
                     {conversationComments.length > 0 ? (
                       <div className="thread-list">
                         {conversationComments.map((comment) => {
@@ -601,13 +770,11 @@ export function App() {
                               <div className="comment-thread" data-author={comment.authorType}>
                                 {commentSection ? <p className="comment-context">{commentSection.headingText}</p> : null}
                                 <p>{comment.body}</p>
-                                <p className="comment-timestamp">
-                                  {formatShortTimestamp(comment.createdAt)}
-                                </p>
                               </div>
                             </div>
                           );
                         })}
+                        <div aria-hidden="true" ref={threadEndRef} />
                       </div>
                     ) : (
                       <p className="empty-thread">
@@ -616,24 +783,30 @@ export function App() {
                     )}
                   </div>
 
-                  <form className="discussion-composer" onSubmit={(event) => void handleComposerSubmit(event)}>
-                    <div className="composer-utility-row">
-                      {attachedSection ? (
-                        <div className="composer-context composer-context-tight">
-                          <span className="context-chip">{attachedSection.headingText}</span>
-                          <button className="text-button" type="button" onClick={() => attachSection(null)}>
-                            Clear
-                          </button>
-                        </div>
-                      ) : <span />}
-                      {hasRemoteUpdate ? (
-                        <div className="discussion-actions discussion-actions-compact">
-                          <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
-                            Reload
-                          </button>
-                        </div>
-                      ) : <span />}
-                    </div>
+                  <form
+                    className="discussion-composer"
+                    onSubmit={(event) => void handleComposerSubmit(event)}
+                    ref={composerFrameRef}
+                  >
+                    {showComposerUtilityRow ? (
+                      <div className="composer-utility-row">
+                        {attachedSection ? (
+                          <div className="composer-context composer-context-tight">
+                            <span className="context-chip">{attachedSection.headingText}</span>
+                            <button className="text-button" type="button" onClick={() => attachSection(null)}>
+                              Clear
+                            </button>
+                          </div>
+                        ) : null}
+                        {hasRemoteUpdate ? (
+                          <div className="discussion-actions discussion-actions-compact">
+                            <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
+                              Reload
+                            </button>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {hasRemoteUpdate ? (
                       <div className="discussion-status-inline">
                         <span className="status-pill">Updated</span>
@@ -648,6 +821,8 @@ export function App() {
                         rows={1}
                         value={composerBody}
                         onChange={(event) => setComposerBody(event.target.value)}
+                        onFocus={handleComposerFocus}
+                        onBlur={handleComposerBlur}
                         placeholder={attachedSection ? `Message about ${attachedSection.headingText}...` : 'Reply about the document...'}
                       />
                       <button className="primary-button composer-submit" type="submit" disabled={submitting}>

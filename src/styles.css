@@ -1,5 +1,7 @@
 :root {
   color-scheme: light;
+  --app-viewport-height: 100vh;
+  --app-viewport-offset-top: 0px;
   --bg: #f3f7f4;
   --paper: #ffffff;
   --paper-soft: #fbfcfa;
@@ -151,7 +153,6 @@ select {
 
 .toolbar-meta,
 .context-subtle,
-.comment-timestamp,
 .empty-thread,
 .error-banner {
   color: var(--muted);
@@ -435,6 +436,9 @@ textarea.path-input {
 
 .shell-overlay-open {
   opacity: 1;
+}
+
+.shell-overlay-interactive {
   pointer-events: auto;
 }
 
@@ -443,6 +447,7 @@ textarea.path-input {
   inset: 0 auto 0 0;
   width: min(88vw, 360px);
   padding: 0;
+  pointer-events: none;
   transform: translateX(calc(-100% - 24px));
   transition: transform 200ms ease;
   z-index: 21;
@@ -450,6 +455,7 @@ textarea.path-input {
 
 .workspace-menu-open {
   transform: translateX(0);
+  pointer-events: auto;
 }
 
 .workspace-menu-panel {
@@ -599,18 +605,6 @@ textarea.path-input {
   letter-spacing: -0.02em;
 }
 
-.recent-item-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--pill);
-  color: var(--accent-strong);
-  font-size: 0.68rem;
-  font-weight: 700;
-}
-
 .recent-item-path {
   color: var(--muted);
   font-size: 0.74rem;
@@ -644,24 +638,30 @@ textarea.path-input {
 
 .discussion-rail {
   position: fixed;
-  inset: 0 0 0 auto;
+  top: var(--app-viewport-offset-top);
+  right: 0;
   width: min(92vw, 420px);
+  height: var(--app-viewport-height);
   padding: 0;
+  pointer-events: none;
   transform: translateX(100%);
   transition: transform 180ms ease;
   z-index: 20;
 }
 
 .discussion-rail-open {
-  transform: translateX(0);
+  transform: none;
+  pointer-events: auto;
 }
 
 .discussion-rail-panel {
   display: flex;
   flex-direction: column;
   height: 100%;
+  max-height: var(--app-viewport-height);
   overflow: hidden;
   overscroll-behavior: contain;
+  touch-action: manipulation;
   border: 1px solid rgba(223, 230, 223, 0.96);
   border-radius: 12px 0 0 12px;
   box-shadow: -22px 0 48px rgba(16, 24, 40, 0.12);
@@ -689,9 +689,11 @@ textarea.path-input {
 
 .discussion-thread {
   flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
+  scroll-padding-bottom: 18px;
   padding: 10px 14px 12px;
 }
 
@@ -764,18 +766,6 @@ textarea.path-input {
 .comment-row[data-author='human'] .comment-context {
   background: rgba(255, 255, 255, 0.62);
   color: color-mix(in srgb, var(--muted) 84%, #668274 16%);
-}
-
-.comment-timestamp {
-  margin-top: 8px;
-  font-size: 0.7rem;
-  line-height: 1.2;
-  letter-spacing: 0.01em;
-  opacity: 0.72;
-}
-
-.comment-row[data-author='human'] .comment-timestamp {
-  text-align: right;
 }
 
 .empty-thread {
@@ -1083,6 +1073,7 @@ textarea.path-input {
 
   .discussion-rail {
     width: min(88vw, 356px);
+    height: var(--app-viewport-height);
     padding: 0;
   }
 
@@ -1115,7 +1106,6 @@ textarea.path-input {
     font-size: 0.94rem;
   }
 
-  .comment-timestamp,
   .empty-thread,
   .context-subtle,
   .rail-error-inline {
