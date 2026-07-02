@@ -33,11 +33,44 @@ function slugify(value) {
     .slice(0, 60) || 'section';
 }
 
-function resolveArtifactPath(inputPath) {
-  const candidate = inputPath && inputPath.trim() ? inputPath.trim() : DEFAULT_ARTIFACT_PATH;
-  const resolved = path.resolve(ROOT_DIR, candidate);
+function isWithinSourceRoot(candidatePath) {
+  return candidatePath === SOURCE_ROOT || candidatePath.startsWith(`${SOURCE_ROOT}${path.sep}`);
+}
 
-  if (!resolved.startsWith(`${SOURCE_ROOT}${path.sep}`) && resolved !== SOURCE_ROOT) {
+async function pathExists(candidatePath) {
+  try {
+    await fs.access(candidatePath);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function resolveArtifactPath(inputPath) {
+  const candidate = inputPath && inputPath.trim() ? inputPath.trim() : DEFAULT_ARTIFACT_PATH;
+  const candidatePaths = path.isAbsolute(candidate)
+    ? [candidate]
+    : [
+        path.resolve(ROOT_DIR, candidate),
+        path.resolve(SOURCE_ROOT, candidate)
+      ];
+
+  const allowedPaths = [...new Set(candidatePaths)].filter(isWithinSourceRoot);
+
+  if (allowedPaths.length === 0) {
+    throw new Error('Artifact path must stay inside the source workspace.');
+  }
+
+  let resolved = allowedPaths[0];
+
+  for (const candidatePath of allowedPaths) {
+    if (await pathExists(candidatePath)) {
+      resolved = candidatePath;
+      break;
+    }
+  }
+
+  if (!isWithinSourceRoot(resolved)) {
     throw new Error('Artifact path must stay inside the source workspace.');
   }
 
@@ -146,7 +179,7 @@ function getArtifactEntry(store, relativePath) {
 }
 
 async function loadArtifactPayload(requestedPath) {
-  const { absolutePath, relativePath } = resolveArtifactPath(requestedPath);
+  const { absolutePath, relativePath } = await resolveArtifactPath(requestedPath);
   const markdown = await fs.readFile(absolutePath, 'utf8');
   const stats = await fs.stat(absolutePath);
   const sections = parseSections(markdown);
@@ -212,6 +245,37 @@ app.get('/api/artifact', async (request, response) => {
   }
 });
 
+app.get('/api/artifact/meta', async (request, response) => {
+  try {
+    const { absolutePath, relativePath } = await resolveArtifactPath(String(request.query.path ?? ''));
+    const stats = await fs.stat(absolutePath);
+
+    response.json({
+      relativePath,
+      absolutePath,
+      updatedAt: stats.mtime.toISOString()
+    });
+  } catch (error) {
+    response.status(400).json({
+      error: error instanceof Error ? error.message : 'Failed to inspect artifact.'
+    });
+  }
+});
+
+app.get('/api/comments', async (request, response) => {
+  try {
+    const artifact = await loadArtifactPayload(String(request.query.path ?? ''));
+    response.json({
+      comments: artifact.comments,
+      artifact
+    });
+  } catch (error) {
+    response.status(400).json({
+      error: error instanceof Error ? error.message : 'Failed to load comments.'
+    });
+  }
+});
+
 app.post('/api/comments', async (request, response) => {
   const { path: artifactPath, sectionId, body } = request.body ?? {};
 
@@ -233,7 +297,7 @@ app.post('/api/comments', async (request, response) => {
   }
 
   try {
-    const { relativePath } = resolveArtifactPath(artifactPath);
+    const { relativePath } = await resolveArtifactPath(artifactPath);
     const store = await readStore();
     const artifactEntry = getArtifactEntry(store, relativePath);
     artifactEntry.comments.push({

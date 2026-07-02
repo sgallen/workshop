@@ -1,0 +1,468 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Workshop Wireframes</title>
+    <style>
+      :root {
+        color-scheme: light;
+        --bg: #f5efe6;
+        --paper: #fffaf3;
+        --ink: #211b18;
+        --muted: #74675d;
+        --line: #d7c8b7;
+        --accent: #b24c27;
+        --accent-soft: #f2dfd0;
+        --shadow: 0 18px 40px rgba(54, 38, 28, 0.1);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        background:
+          radial-gradient(circle at top, rgba(178, 76, 39, 0.08), transparent 35%),
+          linear-gradient(180deg, #fcf8f2 0%, var(--bg) 100%);
+        color: var(--ink);
+        font-family: Georgia, "Times New Roman", serif;
+      }
+
+      main {
+        width: min(1200px, 100%);
+        margin: 0 auto;
+        padding: 28px 18px 40px;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin: 0;
+      }
+
+      .intro {
+        margin-bottom: 24px;
+        padding: 18px 20px;
+        border: 1px solid var(--line);
+        border-radius: 24px;
+        background: rgba(255, 250, 243, 0.9);
+        box-shadow: var(--shadow);
+      }
+
+      .intro h1 {
+        font-size: 2rem;
+        margin-bottom: 10px;
+      }
+
+      .intro p {
+        max-width: 70ch;
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      .grid {
+        display: grid;
+        gap: 22px;
+      }
+
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 28px;
+        background: rgba(255, 250, 243, 0.92);
+        box-shadow: var(--shadow);
+        padding: 18px;
+      }
+
+      .card-head {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        margin-bottom: 14px;
+      }
+
+      .label {
+        font: 700 0.82rem/1.2 "Trebuchet MS", sans-serif;
+        color: var(--accent);
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+      }
+
+      .note {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      .frame {
+        border: 1px solid rgba(215, 200, 183, 0.9);
+        border-radius: 24px;
+        background: var(--paper);
+        overflow: hidden;
+      }
+
+      .toolbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 12px 14px;
+        border-bottom: 1px solid var(--line);
+        background: #fff7ee;
+      }
+
+      .toolbar .title {
+        font-size: 1.05rem;
+        font-weight: 700;
+      }
+
+      .toolbar .meta {
+        color: var(--muted);
+        font-size: 0.9rem;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        border-radius: 999px;
+        background: var(--accent-soft);
+        padding: 7px 12px;
+        font: 700 0.82rem/1 "Trebuchet MS", sans-serif;
+        color: var(--accent);
+      }
+
+      .layout {
+        display: grid;
+        gap: 14px;
+        padding: 14px;
+      }
+
+      .layout-sidecar {
+        grid-template-columns: 1.75fr 1fr;
+      }
+
+      .layout-inline {
+        grid-template-columns: 1fr;
+      }
+
+      .layout-split {
+        grid-template-columns: 1.2fr 0.95fr;
+      }
+
+      .doc,
+      .panel,
+      .reply-box,
+      .thread,
+      .comment-box {
+        border: 1px solid var(--line);
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.72);
+      }
+
+      .doc {
+        padding: 16px;
+      }
+
+      .doc h3 {
+        margin-bottom: 10px;
+        font-size: 1.1rem;
+      }
+
+      .doc p {
+        color: #3e342e;
+        line-height: 1.5;
+        margin-bottom: 10px;
+      }
+
+      .highlight {
+        background: #fde8d7;
+        border-radius: 10px;
+        padding: 2px 5px;
+      }
+
+      .panel {
+        padding: 14px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .panel h3 {
+        font-size: 1rem;
+      }
+
+      .thread,
+      .comment-box,
+      .reply-box {
+        padding: 12px;
+      }
+
+      .thread p,
+      .comment-box p,
+      .reply-box p {
+        line-height: 1.45;
+      }
+
+      .thread .who,
+      .comment-box .who,
+      .reply-box .who {
+        margin-bottom: 8px;
+        color: var(--accent);
+        font: 700 0.8rem/1 "Trebuchet MS", sans-serif;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+
+      .composer {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-end;
+        gap: 12px;
+        border: 1px solid var(--line);
+        border-radius: 22px;
+        padding: 12px 14px;
+        background: #fff;
+      }
+
+      .composer-text {
+        color: var(--muted);
+      }
+
+      .section-tag {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        width: fit-content;
+        border-radius: 999px;
+        border: 1px solid #e4c8b0;
+        background: #fff5ea;
+        color: var(--accent);
+        font: 700 0.82rem/1 "Trebuchet MS", sans-serif;
+        padding: 7px 12px;
+      }
+
+      .row {
+        display: grid;
+        gap: 10px;
+      }
+
+      .doc-inline {
+        display: grid;
+        gap: 12px;
+      }
+
+      .inline-block {
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 14px;
+        background: rgba(255, 255, 255, 0.78);
+      }
+
+      .inline-thread {
+        margin-top: 10px;
+        padding-left: 16px;
+        border-left: 3px solid #ebd3c0;
+        display: grid;
+        gap: 10px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 10px;
+      }
+
+      .decision {
+        margin-top: 14px;
+        padding-top: 14px;
+        border-top: 1px solid rgba(215, 200, 183, 0.8);
+        color: var(--muted);
+        line-height: 1.5;
+      }
+
+      @media (max-width: 900px) {
+        .layout-sidecar,
+        .layout-split {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="intro">
+        <p class="label">Workshop UI Study</p>
+        <h1>Three plausible ways to keep the document as the center of gravity</h1>
+        <p>
+          These are deliberately low-fidelity. The goal is to choose the interaction model, not the visual polish.
+          Each option assumes the same Barney/session underneath. The question is how the conversation stays tethered
+          to the document.
+        </p>
+      </section>
+
+      <section class="grid">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <p class="label">Option A</p>
+              <h2>Sidecar Thread</h2>
+            </div>
+            <p class="note">Best for focused review while keeping chat visible</p>
+          </div>
+          <div class="frame">
+            <div class="toolbar">
+              <div>
+                <div class="title">project-brief.md</div>
+                <div class="meta">Document stays dominant, thread follows selected scope</div>
+              </div>
+              <div class="pill">Scope: Problem / Opportunity</div>
+            </div>
+            <div class="layout layout-sidecar">
+              <div class="doc">
+                <h3>Problem / Opportunity</h3>
+                <p>
+                  LoopKit has strong technical credibility but the current framing is
+                  <span class="highlight">too implementation-heavy too early</span>
+                  for an outside collaborator or funder.
+                </p>
+                <p>
+                  The brief should lead with why this matters, what pain exists, and why this team is well positioned.
+                </p>
+                <p>Other sections remain visible below so the whole doc never disappears.</p>
+              </div>
+              <aside class="panel">
+                <h3>Thread on this section</h3>
+                <div class="thread">
+                  <div class="who">Scott</div>
+                  <p>This section starts too deep in implementation. Pull the user/problem framing forward.</p>
+                </div>
+                <div class="reply-box">
+                  <div class="who">Barney</div>
+                  <p>I agree. I’d likely reframe this around the practical pain first, then introduce the technical asset after.</p>
+                </div>
+                <div class="composer">
+                  <div class="composer-text">Reply about “Problem / Opportunity”</div>
+                  <div class="pill">Send</div>
+                </div>
+              </aside>
+            </div>
+          </div>
+          <p class="decision">
+            Feels natural and easy to understand. Risk: if the side thread gets too lively, it starts to compete with the document.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <p class="label">Option B</p>
+              <h2>Inline Anchored Discussion</h2>
+            </div>
+            <p class="note">Best for keeping every exchange literally attached to text</p>
+          </div>
+          <div class="frame">
+            <div class="toolbar">
+              <div>
+                <div class="title">project-brief.md</div>
+                <div class="meta">Conversation appears inside the document near the relevant passage</div>
+              </div>
+              <div class="pill">Mode: Reading + annotations</div>
+            </div>
+            <div class="layout layout-inline">
+              <div class="doc-inline">
+                <div class="inline-block">
+                  <h3>Project framing</h3>
+                  <p>
+                    LoopKit is an open-source ecosystem with meaningful traction and high trust in a sensitive domain.
+                  </p>
+                </div>
+                <div class="inline-block">
+                  <h3>Problem / Opportunity</h3>
+                  <p>
+                    The current brief jumps quickly into architecture and underplays the collaborator-facing story.
+                  </p>
+                  <div class="inline-thread">
+                    <div class="comment-box">
+                      <div class="who">Scott</div>
+                      <p>Can we make this feel more strategic and less implementation-first?</p>
+                    </div>
+                    <div class="comment-box">
+                      <div class="who">Barney</div>
+                      <p>Yes. I’d lead with stake, pain, and why LoopKit is unusually credible here.</p>
+                    </div>
+                    <div class="composer">
+                      <div class="composer-text">Reply inline to this section</div>
+                      <div class="pill">Send</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="inline-block">
+                  <h3>Approach</h3>
+                  <p>Technical implementation appears below, still in the same reading flow.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="decision">
+            Strongest document focus. Risk: more complex to implement cleanly, and long discussions could make the reading flow feel cluttered.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <p class="label">Option C</p>
+              <h2>Focus Tray</h2>
+            </div>
+            <p class="note">Best compromise between clean reading and contextual interaction</p>
+          </div>
+          <div class="frame">
+            <div class="toolbar">
+              <div>
+                <div class="title">project-brief.md</div>
+                <div class="meta">Document stays full-width until a selection opens a temporary focus tray</div>
+              </div>
+              <div class="pill">Selected: Problem / Opportunity</div>
+            </div>
+            <div class="layout layout-split">
+              <div class="doc">
+                <h3>Document view</h3>
+                <p>The doc is the default. You read normally.</p>
+                <p>
+                  When you tap a section, that passage becomes the active focus, but the rest of the document remains visible.
+                </p>
+                <p>
+                  This means the chat is summoned by context instead of always occupying space.
+                </p>
+              </div>
+              <aside class="panel">
+                <div class="section-tag">Problem / Opportunity</div>
+                <div class="stack">
+                  <div class="thread">
+                    <div class="who">Scott</div>
+                    <p>Can this say less about architecture and more about the strategic opening?</p>
+                  </div>
+                  <div class="reply-box">
+                    <div class="who">Barney</div>
+                    <p>Yes. I’d probably rewrite the opening paragraph rather than lightly edit it.</p>
+                  </div>
+                  <div class="reply-box">
+                    <div class="who">Status</div>
+                    <p>Proposed edit available • Undo after apply</p>
+                  </div>
+                </div>
+                <div class="composer">
+                  <div class="composer-text">Message about selected section</div>
+                  <div class="pill">Send</div>
+                </div>
+              </aside>
+            </div>
+          </div>
+          <p class="decision">
+            My current favorite. It keeps the document primary, reduces persistent chat noise, and still gives a clear place for conversation and edits.
+          </p>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

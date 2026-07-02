@@ -167,6 +167,33 @@ Keep URLs simple and stable.
 
 The shareable link should usually go directly to `/artifacts/:sessionId`.
 
+## Minimal Agent Handoff Contract
+
+v0 needs an explicit contract for how an agent opens an artifact in Workshop.
+
+The contract should be:
+
+1. the caller provides a real artifact path
+2. Workshop opens or resumes an artifact session for that path
+3. Workshop returns a stable artifact URL
+4. the human lands directly in the artifact view
+5. the UI exposes artifact identity and revision state without exposing local-path complexity
+
+This contract matters because the user experience should feel like:
+
+- "open this artifact in Workshop"
+
+not:
+
+- "here is a machine-specific path and a local setup ritual"
+
+Implications for v0:
+
+- session identity should be stable enough for reopen/resume behavior
+- path resolution belongs at the server boundary, not in the shared human-facing flow
+- artifact metadata should support reload/revision awareness
+- the returned link should be the primary object an agent shares back into chat
+
 ## Mobile-First UX Shape
 
 Default to a single-column reading view.

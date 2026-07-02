@@ -63,6 +63,39 @@ The promise is simple:
 - switch to a focused collaboration surface
 - keep the artifact, comments, and revisions attached to the actual file
 
+## Minimal Handoff Contract
+
+For v0, the agent-to-Workshop handoff should stay brutally simple.
+
+The contract is:
+
+1. the agent identifies a real artifact file
+2. the agent asks Workshop to open or resume that artifact as a session
+3. Workshop returns a stable artifact URL
+4. the human opens that URL directly into the artifact view
+5. the human does not need to reason about local paths, repo roots, or shell commands
+
+What the human should see:
+
+- a clean artifact title
+- rendered content
+- visible comment and revision state
+- a stable shareable link
+
+What the human should not need to see:
+
+- absolute file paths
+- repo-internal path conventions
+- laptop-specific setup details
+- any distinction between "open file" and "resume session" beyond whether the artifact is already there
+
+What the agent must preserve:
+
+- the underlying file remains the source of truth
+- the handoff link stays artifact-centered, not chat-centered
+- reopening an artifact prefers resuming the same session shape when possible
+- file changes outside the page can be detected and surfaced clearly
+
 ## v0 Focus
 
 Workshop should start narrow.
