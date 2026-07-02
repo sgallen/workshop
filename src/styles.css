@@ -5,10 +5,10 @@
   --bg: #f4f1eb;
   --paper: #ffffff;
   --paper-soft: #fcfaf7;
-  --ink: #17221b;
+  --ink: #182535;
   --muted: #667085;
-  --line: #dfe6df;
-  --line-strong: #ced8cf;
+  --line: #dde4ee;
+  --line-strong: #cfd8e4;
   --accent: #3e5a8a;
   --accent-strong: #2e4467;
   --pill: #eef2f8;
@@ -55,7 +55,7 @@ select {
 .discussion-rail-panel,
 .workspace-menu-panel {
   background: color-mix(in srgb, var(--paper) 95%, var(--paper-soft) 5%);
-  border: 1px solid rgba(223, 230, 223, 0.95);
+  border: 1px solid rgba(221, 228, 238, 0.95);
   border-radius: 16px;
   box-shadow: var(--shadow);
 }
@@ -212,7 +212,7 @@ textarea.path-input {
   margin-top: 2px;
   margin-bottom: 14px;
   padding: 10px 12px;
-  border: 1px solid rgba(223, 230, 223, 0.98);
+  border: 1px solid rgba(221, 228, 238, 0.98);
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.82);
   box-shadow: 0 10px 28px rgba(16, 24, 40, 0.08);
@@ -265,7 +265,7 @@ textarea.path-input {
   flex-wrap: wrap;
   margin-top: 10px;
   padding-top: 12px;
-  border-top: 1px solid rgba(223, 230, 223, 0.9);
+  border-top: 1px solid rgba(221, 228, 238, 0.9);
 }
 
 .reader-meta-pills {
@@ -293,7 +293,7 @@ textarea.path-input {
 .meta-pill {
   background: rgba(246, 248, 246, 0.96);
   color: #475467;
-  border: 1px solid rgba(223, 230, 223, 0.96);
+  border: 1px solid rgba(221, 228, 238, 0.96);
 }
 
 .meta-pill-muted {
@@ -341,6 +341,8 @@ textarea.path-input {
   display: inline-block;
   line-height: 1.15;
   cursor: pointer;
+  padding: 0.16em 0.34em;
+  margin: -0.16em -0.34em;
   transition:
     color 120ms ease,
     background-color 120ms ease,
@@ -364,8 +366,8 @@ textarea.path-input {
 .section-card[data-attached='true'] .section-rendered h4,
 .section-card[data-attached='true'] .section-rendered h5,
 .section-card[data-attached='true'] .section-rendered h6 {
-  background: rgba(231, 245, 239, 0.95);
-  box-shadow: inset 0 0 0 1px rgba(62, 90, 138, 0.16);
+  background: rgba(245, 247, 250, 0.98);
+  box-shadow: inset 0 0 0 1px rgba(24, 37, 53, 0.08);
 }
 
 .section-rendered p,
@@ -420,7 +422,7 @@ textarea.path-input {
 }
 
 .section-rendered pre {
-  border: 1px solid rgba(223, 230, 223, 0.96);
+  border: 1px solid rgba(221, 228, 238, 0.96);
   border-radius: 12px;
   background: #f8f7f4;
   padding: 14px 16px;
@@ -467,7 +469,7 @@ textarea.path-input {
   height: 100%;
   overflow-y: auto;
   padding: max(14px, env(safe-area-inset-top)) 12px max(14px, env(safe-area-inset-bottom));
-  border: 1px solid rgba(223, 230, 223, 0.96);
+  border: 1px solid rgba(221, 228, 238, 0.96);
   border-radius: 0 12px 12px 0;
   box-shadow: 22px 0 48px rgba(16, 24, 40, 0.12);
   background:
@@ -482,7 +484,7 @@ textarea.path-input {
   justify-content: space-between;
   gap: 12px;
   padding: 2px 6px 4px;
-  border-bottom: 1px solid rgba(223, 230, 223, 0.9);
+  border-bottom: 1px solid rgba(221, 228, 238, 0.9);
 }
 
 .workspace-brand-lockup {
@@ -538,7 +540,7 @@ textarea.path-input {
   width: 38px;
   min-width: 38px;
   height: 38px;
-  border: 1px solid rgba(223, 230, 223, 0.96);
+  border: 1px solid rgba(221, 228, 238, 0.96);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.92);
   color: var(--ink);
@@ -664,7 +666,7 @@ textarea.path-input {
   overflow: hidden;
   overscroll-behavior: contain;
   touch-action: manipulation;
-  border: 1px solid rgba(223, 230, 223, 0.96);
+  border: 1px solid rgba(221, 228, 238, 0.96);
   border-radius: 12px 0 0 12px;
   box-shadow: -22px 0 48px rgba(16, 24, 40, 0.12);
   background:
@@ -679,7 +681,7 @@ textarea.path-input {
 
 .discussion-rail-header {
   justify-content: flex-end;
-  border-bottom: 1px solid rgba(223, 230, 223, 0.82);
+  border-bottom: 1px solid rgba(221, 228, 238, 0.82);
 }
 
 .discussion-header-actions {
@@ -725,7 +727,7 @@ textarea.path-input {
   border-radius: 12px;
   padding: 12px 13px 10px;
   background: #ffffff;
-  border: 1px solid rgba(223, 230, 223, 0.98);
+  border: 1px solid rgba(221, 228, 238, 0.98);
   box-shadow: var(--shadow-soft);
 }
 
@@ -786,7 +788,7 @@ textarea.path-input {
 }
 
 .discussion-composer {
-  border-top: 1px solid rgba(223, 230, 223, 0.82);
+  border-top: 1px solid rgba(221, 228, 238, 0.82);
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.82) 0%, rgba(247, 251, 248, 0.98) 100%);
 }
 
@@ -881,7 +883,7 @@ textarea.path-input {
   border: 0;
   border-radius: 999px;
   background: linear-gradient(180deg, #4a6ba0 0%, var(--accent-strong) 100%);
-  color: #f8fffc;
+  color: #f8fafc;
   font-size: 0.96rem;
   font-weight: 700;
   padding: 0;
