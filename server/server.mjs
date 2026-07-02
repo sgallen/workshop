@@ -136,19 +136,33 @@ async function ensureDataFile() {
   try {
     await fs.access(DATA_FILE);
   } catch {
-    await fs.writeFile(DATA_FILE, JSON.stringify({ artifacts: {} }, null, 2));
+    await fs.writeFile(DATA_FILE, JSON.stringify({ artifacts: {}, recents: [] }, null, 2));
   }
+}
+
+function ensureStoreShape(store) {
+  const nextStore = store && typeof store === 'object' ? store : {};
+
+  if (!nextStore.artifacts || typeof nextStore.artifacts !== 'object') {
+    nextStore.artifacts = {};
+  }
+
+  if (!Array.isArray(nextStore.recents)) {
+    nextStore.recents = [];
+  }
+
+  return nextStore;
 }
 
 async function readStore() {
   await ensureDataFile();
   const raw = await fs.readFile(DATA_FILE, 'utf8');
-  return JSON.parse(raw);
+  return ensureStoreShape(JSON.parse(raw));
 }
 
 async function writeStore(store) {
   await ensureDataFile();
-  await fs.writeFile(DATA_FILE, JSON.stringify(store, null, 2));
+  await fs.writeFile(DATA_FILE, JSON.stringify(ensureStoreShape(store), null, 2));
 }
 
 function getArtifactEntry(store, relativePath) {
@@ -176,6 +190,61 @@ function getArtifactEntry(store, relativePath) {
   }
 
   return artifactEntry;
+}
+
+function ensureRecentArtifact(store, artifact) {
+  const existingIndex = store.recents.findIndex((entry) => entry.relativePath === artifact.relativePath);
+
+  if (existingIndex >= 0) {
+    store.recents[existingIndex] = {
+      ...store.recents[existingIndex],
+      title: artifact.title,
+      updatedAt: artifact.updatedAt
+    };
+    return;
+  }
+
+  store.recents.push({
+    title: artifact.title,
+    relativePath: artifact.relativePath,
+    updatedAt: artifact.updatedAt,
+    lastOpenedAt: new Date().toISOString()
+  });
+  store.recents = store.recents.slice(-24);
+}
+
+function recordRecentDiscussion(store, artifact, discussedAt = new Date().toISOString()) {
+  const existingEntry = store.recents.find((entry) => entry.relativePath === artifact.relativePath);
+  const nextEntry = {
+    ...existingEntry,
+    title: artifact.title,
+    relativePath: artifact.relativePath,
+    updatedAt: artifact.updatedAt,
+    lastOpenedAt: existingEntry?.lastOpenedAt ?? discussedAt,
+    lastDiscussedAt: discussedAt
+  };
+
+  const filtered = store.recents.filter((entry) => entry.relativePath !== artifact.relativePath);
+  store.recents = [nextEntry, ...filtered].slice(0, 24);
+}
+
+function listRecentArtifacts(store) {
+  return store.recents
+    .filter((entry) => {
+      return Boolean(entry && typeof entry.relativePath === 'string');
+    })
+    .map((entry) => {
+      const artifactEntry = getArtifactEntry(store, entry.relativePath);
+
+      return {
+        title: typeof entry.title === 'string' && entry.title.trim() ? entry.title : path.basename(entry.relativePath),
+        relativePath: entry.relativePath,
+        updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : null,
+        lastOpenedAt: typeof entry.lastOpenedAt === 'string' ? entry.lastOpenedAt : null,
+        lastDiscussedAt: typeof entry.lastDiscussedAt === 'string' ? entry.lastDiscussedAt : null,
+        commentCount: Array.isArray(artifactEntry.comments) ? artifactEntry.comments.length : 0
+      };
+    });
 }
 
 async function loadArtifactPayload(requestedPath) {
@@ -237,6 +306,9 @@ app.get('/api/config', (request, response) => {
 app.get('/api/artifact', async (request, response) => {
   try {
     const artifact = await loadArtifactPayload(String(request.query.path ?? ''));
+    const store = await readStore();
+    ensureRecentArtifact(store, artifact);
+    await writeStore(store);
     response.json({ artifact });
   } catch (error) {
     response.status(400).json({
@@ -276,6 +348,19 @@ app.get('/api/comments', async (request, response) => {
   }
 });
 
+app.get('/api/recents', async (_request, response) => {
+  try {
+    const store = await readStore();
+    response.json({
+      recents: listRecentArtifacts(store)
+    });
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to load recents.'
+    });
+  }
+});
+
 app.post('/api/comments', async (request, response) => {
   const { path: artifactPath, sectionId, body } = request.body ?? {};
 
@@ -300,13 +385,20 @@ app.post('/api/comments', async (request, response) => {
     const { relativePath } = await resolveArtifactPath(artifactPath);
     const store = await readStore();
     const artifactEntry = getArtifactEntry(store, relativePath);
+    const createdAt = new Date().toISOString();
+
     artifactEntry.comments.push({
       id: `${Date.now()}`,
       authorType: 'human',
       body: trimmedBody,
-      createdAt: new Date().toISOString(),
+      createdAt,
       sectionId: typeof sectionId === 'string' ? sectionId : null
     });
+    recordRecentDiscussion(store, {
+      title: path.basename(relativePath),
+      relativePath,
+      updatedAt: null
+    }, createdAt);
 
     await writeStore(store);
 

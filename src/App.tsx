@@ -27,6 +27,15 @@ type Artifact = {
   comments: Comment[];
 };
 
+type RecentArtifact = {
+  title: string;
+  relativePath: string;
+  updatedAt: string | null;
+  lastOpenedAt: string | null;
+  lastDiscussedAt?: string | null;
+  commentCount: number;
+};
+
 const DEFAULT_ARTIFACT_PATH = 'docs/project-brief.md';
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
@@ -46,6 +55,25 @@ function formatShortTimestamp(value: string) {
   }).format(new Date(value));
 }
 
+function formatRecentDate(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric'
+  }).format(new Date(value));
+}
+
+function formatRecentActivity(recent: RecentArtifact) {
+  if (recent.lastDiscussedAt) {
+    return `Discussed ${formatRecentDate(recent.lastDiscussedAt)}`;
+  }
+
+  if (recent.lastOpenedAt) {
+    return `Opened ${formatRecentDate(recent.lastOpenedAt)}`;
+  }
+
+  return 'Recent artifact';
+}
+
 export function App() {
   const initialPath = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -56,10 +84,12 @@ export function App() {
   const [artifactPath, setArtifactPath] = useState(initialPath);
   const [draftPath, setDraftPath] = useState(initialPath);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
+  const [recentArtifacts, setRecentArtifacts] = useState<RecentArtifact[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [composerBody, setComposerBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [attachedSectionId, setAttachedSectionId] = useState<string | null>(null);
   const [checkingUpdates, setCheckingUpdates] = useState(false);
@@ -73,10 +103,16 @@ export function App() {
   const attachedSection = attachedSectionId ? sectionById.get(attachedSectionId) ?? null : null;
   const conversationComments = artifact?.comments ?? [];
   const resolvedArtifactPath = artifact?.relativePath ?? artifactPath;
+  const isPanelOpen = menuOpen || railOpen;
+  const visibleRecentArtifacts = recentArtifacts.filter((recent) => recent.relativePath !== resolvedArtifactPath);
 
   useEffect(() => {
     void loadArtifact(artifactPath);
   }, [artifactPath]);
+
+  useEffect(() => {
+    void loadRecents();
+  }, []);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -115,7 +151,7 @@ export function App() {
   }, [artifactPath, artifact, railOpen, lastLoadedUpdatedAt]);
 
   useEffect(() => {
-    if (!railOpen) {
+    if (!isPanelOpen) {
       return;
     }
 
@@ -141,7 +177,22 @@ export function App() {
       documentElement.style.overflow = previousHtmlOverflow;
       window.scrollTo(0, scrollY);
     };
-  }, [railOpen]);
+  }, [isPanelOpen]);
+
+  async function loadRecents() {
+    try {
+      const response = await fetch('/api/recents');
+      const payload = await readJsonResponse<{ recents?: RecentArtifact[]; error?: string }>(response);
+
+      if (!response.ok || !payload.recents) {
+        throw new Error(payload.error ?? 'Failed to load recents.');
+      }
+
+      setRecentArtifacts(payload.recents);
+    } catch {
+      setRecentArtifacts([]);
+    }
+  }
 
   async function loadArtifact(nextPath: string) {
     setLoading(true);
@@ -164,6 +215,7 @@ export function App() {
       const params = new URLSearchParams(window.location.search);
       params.set('path', payload.artifact.relativePath);
       window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+      void loadRecents();
     } catch (caughtError) {
       setArtifact(null);
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load artifact.');
@@ -209,6 +261,21 @@ export function App() {
     attachSection(attachedSectionId === sectionId ? null : sectionId);
   }
 
+  function handleOpenArtifact(nextPath: string) {
+    const normalizedPath = nextPath.trim() || DEFAULT_ARTIFACT_PATH;
+
+    setDraftPath(normalizedPath);
+    setMenuOpen(false);
+    setRailOpen(false);
+
+    if (normalizedPath === artifactPath) {
+      void loadArtifact(normalizedPath);
+      return;
+    }
+
+    setArtifactPath(normalizedPath);
+  }
+
   async function handleComposerSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const body = composerBody.trim();
@@ -240,6 +307,7 @@ export function App() {
 
       setArtifact(payload.artifact);
       setComposerBody('');
+      void loadRecents();
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to save comment.');
     } finally {
@@ -251,208 +319,285 @@ export function App() {
     await loadArtifact(resolvedArtifactPath);
   }
 
+  function handleDismissPanels() {
+    setMenuOpen(false);
+    setRailOpen(false);
+  }
+
   return (
-    <main className="app-shell">
-      {!artifact ? (
-        <section className="app-toolbar" aria-label="Artifact controls">
-          <div className="toolbar-copy">
-            <p className="eyebrow">Workshop</p>
-            <p className="toolbar-title">Open artifact</p>
-            <p className="toolbar-meta">A quieter, phone-first review surface for one document and one running discussion.</p>
+    <main className={`app-shell${menuOpen ? ' app-shell-menu-open' : ''}`}>
+      <div
+        className={`shell-overlay${isPanelOpen ? ' shell-overlay-open' : ''}`}
+        onClick={handleDismissPanels}
+        aria-hidden={isPanelOpen ? 'false' : 'true'}
+      />
+
+      <aside className={`workspace-menu${menuOpen ? ' workspace-menu-open' : ''}`} aria-label="Workshop navigation">
+        <div className="workspace-menu-panel">
+          <div className="workspace-menu-header">
+            <div className="workspace-brand-lockup">
+              <div className="workspace-logo-mark" aria-hidden="true">W</div>
+            </div>
+            <button className="workspace-menu-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu">
+              ×
+            </button>
           </div>
-          <form
-            className="path-form"
-            onSubmit={(event) => {
-              event.preventDefault();
-              setArtifactPath(draftPath.trim() || DEFAULT_ARTIFACT_PATH);
-            }}
-          >
-            <div className="path-row">
-              <input
-                id="artifact-path"
-                className="path-input"
-                type="text"
-                value={draftPath}
-                onChange={(event) => setDraftPath(event.target.value)}
-                placeholder={DEFAULT_ARTIFACT_PATH}
-              />
-              <button className="secondary-button" type="submit">
-                Open
+
+          <div className="workspace-menu-section workspace-menu-recents">
+            <div className="workspace-menu-section-header">
+              <p className="section-label workspace-menu-label">Recents</p>
+            </div>
+
+            {visibleRecentArtifacts.length > 0 ? (
+              <div className="recent-list" role="list">
+                {visibleRecentArtifacts.map((recent) => {
+                  return (
+                    <button
+                      key={recent.relativePath}
+                      className="recent-item"
+                      data-active="false"
+                      type="button"
+                      onClick={() => handleOpenArtifact(recent.relativePath)}
+                    >
+                      <span className="recent-item-topline">
+                        <span className="recent-item-title">{recent.title}</span>
+                      </span>
+                      <span className="recent-item-path">{recent.relativePath}</span>
+                      <span className="recent-item-meta">
+                        <span>{formatRecentActivity(recent)}</span>
+                        <span>{recent.commentCount} {recent.commentCount === 1 ? 'message' : 'messages'}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            ) : (
+              <p className="empty-thread workspace-menu-empty">
+                Open another document and it will show up here for quick switching.
+              </p>
+            )}
+          </div>
+        </div>
+      </aside>
+
+      <div className="app-frame">
+        {!artifact ? (
+          <section className="app-toolbar" aria-label="Artifact controls">
+            <div className="toolbar-header-row">
+              <button className="secondary-button compact-button icon-button menu-trigger" type="button" onClick={() => setMenuOpen(true)} aria-label="Open menu">
+                <span className="menu-trigger-bars" aria-hidden="true">
+                  <span />
+                  <span />
+                </span>
               </button>
             </div>
-          </form>
-        </section>
-      ) : null}
-
-      {error ? <p className="error-banner">{error}</p> : null}
-
-      {loading ? (
-        <section className="artifact-card">
-          <p className="artifact-kicker">Loading artifact</p>
-          <h2>Fetching Markdown and discussion...</h2>
-        </section>
-      ) : null}
-
-      {artifact ? (
-        <>
-          <header className="reader-bar">
-            <div className="reader-bar-row">
-              <div className="reader-meta">
-                <p className="eyebrow">Workshop</p>
-                <p className="reader-title">{artifact.title}</p>
-              </div>
-              <div className="reader-actions">
-                {hasRemoteUpdate ? (
-                  <button className="secondary-button compact-button" type="button" onClick={() => void handleReloadDocument()}>
-                    Reload document
-                  </button>
-                ) : null}
-                <button
-                  className="secondary-button compact-button reader-rail-button"
-                  type="button"
-                  onClick={() => setRailOpen((current) => !current)}
-                >
-                  {railOpen ? 'Close' : 'Discuss'}
+            <div className="toolbar-copy">
+              <p className="toolbar-title">Open artifact</p>
+              <p className="toolbar-meta">A quieter, phone-first review surface for one document and one running discussion.</p>
+            </div>
+            <form
+              className="path-form"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleOpenArtifact(draftPath);
+              }}
+            >
+              <div className="path-row">
+                <input
+                  className="path-input"
+                  type="text"
+                  value={draftPath}
+                  onChange={(event) => setDraftPath(event.target.value)}
+                  placeholder={DEFAULT_ARTIFACT_PATH}
+                />
+                <button className="secondary-button" type="submit">
+                  Open
                 </button>
               </div>
-            </div>
-            <div className="reader-link-row" aria-label="Artifact metadata">
-              <p className="reader-link-path">{artifact.relativePath}</p>
-              <p className="reader-inline-meta">
-                <span>{conversationComments.length} {conversationComments.length === 1 ? 'message' : 'messages'}</span>
-                <span>Synced {formatShortTimestamp(artifact.updatedAt)}</span>
-              </p>
-            </div>
-            {hasRemoteUpdate ? (
-              <div className="reader-status-banner">
-                <span className="status-pill">Document updated</span>
-                <span className="context-subtle">Reload when you want the latest file state.</span>
-              </div>
-            ) : null}
-          </header>
+            </form>
+          </section>
+        ) : null}
 
-          <div className={`rail-overlay${railOpen ? ' rail-overlay-open' : ''}`} onClick={() => setRailOpen(false)} aria-hidden={railOpen ? 'false' : 'true'} />
+        {error ? <p className="error-banner">{error}</p> : null}
 
-          <div className={`reader-layout${railOpen ? ' reader-layout-with-rail' : ''}`}>
-            <section className="artifact-card artifact-reader">
-              <div className="section-list">
-                {artifact.sections.map((section) => (
-                  <article
-                    className="section-card"
-                    data-attached={attachedSectionId === section.id ? 'true' : 'false'}
-                    id={section.id}
-                    key={section.id}
-                    onClick={(event) => handleSectionHeadingClick(section.id, event)}
-                  >
-                    <div
-                      className="section-rendered"
-                      dangerouslySetInnerHTML={{ __html: section.renderedHtml }}
-                    />
-                  </article>
-                ))}
-              </div>
-            </section>
+        {loading ? (
+          <section className="artifact-card">
+            <p className="artifact-kicker">Loading artifact</p>
+            <h2>Fetching Markdown and discussion...</h2>
+          </section>
+        ) : null}
 
-            <aside className={`discussion-rail${railOpen ? ' discussion-rail-open' : ''}`} aria-label="Discussion">
-              <div className="discussion-rail-panel">
-                <div className="discussion-rail-header">
-                  <div className="discussion-copy">
-                    <p className="discussion-title">Discussion</p>
-                    <p className="discussion-subtitle">
-                      {conversationComments.length > 0
-                        ? `${conversationComments.length} ${conversationComments.length === 1 ? 'message' : 'messages'} on this artifact`
-                        : 'Start the thread for this artifact'}
-                    </p>
-                  </div>
-                  <div className="discussion-header-actions">
-                    <button
-                      className="secondary-button compact-button discussion-header-button"
-                      type="button"
-                      onClick={() => void checkForRemoteUpdate()}
-                      disabled={checkingUpdates}
-                    >
-                      {checkingUpdates ? 'Refreshing...' : 'Refresh'}
-                    </button>
-                    <button
-                      className="secondary-button compact-button discussion-header-button"
-                      type="button"
-                      onClick={() => setRailOpen(false)}
-                    >
-                      Close
-                    </button>
+        {artifact ? (
+          <>
+            <header className="reader-bar">
+              <div className="reader-bar-row">
+                <div className="reader-bar-leading">
+                  <button className="secondary-button compact-button icon-button menu-trigger" type="button" onClick={() => {
+                    setRailOpen(false);
+                    setMenuOpen(true);
+                  }} aria-label="Open menu">
+                    <span className="menu-trigger-bars" aria-hidden="true">
+                      <span />
+                      <span />
+                    </span>
+                  </button>
+                  <div className="reader-meta">
+                    <p className="reader-title">{artifact.title}</p>
                   </div>
                 </div>
-
-                <div className="discussion-thread">
-                  {conversationComments.length > 0 ? (
-                    <div className="thread-list">
-                      {conversationComments.map((comment) => {
-                        const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
-
-                        return (
-                          <div className="comment-row" key={comment.id} data-author={comment.authorType}>
-                            <div className="comment-thread" data-author={comment.authorType}>
-                              {commentSection ? <p className="comment-context">{commentSection.headingText}</p> : null}
-                              <p>{comment.body}</p>
-                              <p className="comment-timestamp">
-                                {formatShortTimestamp(comment.createdAt)}
-                              </p>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-                  ) : (
-                    <p className="empty-thread">
-                      Nothing here yet. Select a section or write about the document to get started.
-                    </p>
-                  )}
-                </div>
-
-                <form className="discussion-composer" onSubmit={(event) => void handleComposerSubmit(event)}>
-                  <div className="composer-utility-row">
-                    {attachedSection ? (
-                      <div className="composer-context composer-context-tight">
-                        <span className="context-chip">{attachedSection.headingText}</span>
-                        <button className="text-button" type="button" onClick={() => attachSection(null)}>
-                          Clear
-                        </button>
-                      </div>
-                    ) : <span />}
-                    {hasRemoteUpdate ? (
-                      <div className="discussion-actions discussion-actions-compact">
-                        <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
-                          Reload
-                        </button>
-                      </div>
-                    ) : <span />}
-                  </div>
+                <div className="reader-actions">
                   {hasRemoteUpdate ? (
-                    <div className="discussion-status-inline">
-                      <span className="status-pill">Updated</span>
-                      <span className="context-subtle">A newer document version is available.</span>
-                    </div>
-                  ) : null}
-                  {error ? <p className="rail-error-inline">{error}</p> : null}
-                  <div className="composer-row">
-                    <textarea
-                      ref={composerRef}
-                      className="composer-input"
-                      rows={1}
-                      value={composerBody}
-                      onChange={(event) => setComposerBody(event.target.value)}
-                      placeholder={attachedSection ? `Message about ${attachedSection.headingText}...` : 'Reply about the document...'}
-                    />
-                    <button className="primary-button composer-submit" type="submit" disabled={submitting}>
-                      {submitting ? '...' : '➤'}
+                    <button className="secondary-button compact-button" type="button" onClick={() => void handleReloadDocument()}>
+                      Reload document
                     </button>
-                  </div>
-                </form>
+                  ) : null}
+                  <button
+                    className="secondary-button compact-button reader-rail-button"
+                    type="button"
+                    onClick={() => {
+                      setMenuOpen(false);
+                      setRailOpen((current) => !current);
+                    }}
+                  >
+                    {railOpen ? 'Close' : 'Discuss'}
+                  </button>
+                </div>
               </div>
-            </aside>
-          </div>
-        </>
-      ) : null}
+              <div className="reader-link-row" aria-label="Artifact metadata">
+                <p className="reader-inline-meta">
+                  <span>{conversationComments.length} {conversationComments.length === 1 ? 'message' : 'messages'}</span>
+                  <span>Synced {formatShortTimestamp(artifact.updatedAt)}</span>
+                </p>
+              </div>
+              {hasRemoteUpdate ? (
+                <div className="reader-status-banner">
+                  <span className="status-pill">Document updated</span>
+                  <span className="context-subtle">Reload when you want the latest file state.</span>
+                </div>
+              ) : null}
+            </header>
+
+            <div className={`reader-layout${railOpen ? ' reader-layout-with-rail' : ''}`}>
+              <section className="artifact-card artifact-reader">
+                <div className="section-list">
+                  {artifact.sections.map((section) => (
+                    <article
+                      className="section-card"
+                      data-attached={attachedSectionId === section.id ? 'true' : 'false'}
+                      id={section.id}
+                      key={section.id}
+                      onClick={(event) => handleSectionHeadingClick(section.id, event)}
+                    >
+                      <div
+                        className="section-rendered"
+                        dangerouslySetInnerHTML={{ __html: section.renderedHtml }}
+                      />
+                    </article>
+                  ))}
+                </div>
+              </section>
+
+              <aside className={`discussion-rail${railOpen ? ' discussion-rail-open' : ''}`} aria-label="Discussion">
+                <div className="discussion-rail-panel">
+                  <div className="discussion-rail-header">
+                    <div className="discussion-copy">
+                      <p className="discussion-title">Discussion</p>
+                      <p className="discussion-subtitle">
+                        {conversationComments.length > 0
+                          ? `${conversationComments.length} ${conversationComments.length === 1 ? 'message' : 'messages'} on this artifact`
+                          : 'Start the thread for this artifact'}
+                      </p>
+                    </div>
+                    <div className="discussion-header-actions">
+                      <button
+                        className="secondary-button compact-button discussion-header-button"
+                        type="button"
+                        onClick={() => void checkForRemoteUpdate()}
+                        disabled={checkingUpdates}
+                      >
+                        {checkingUpdates ? 'Refreshing...' : 'Refresh'}
+                      </button>
+                      <button
+                        className="secondary-button compact-button discussion-header-button"
+                        type="button"
+                        onClick={() => setRailOpen(false)}
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="discussion-thread">
+                    {conversationComments.length > 0 ? (
+                      <div className="thread-list">
+                        {conversationComments.map((comment) => {
+                          const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
+
+                          return (
+                            <div className="comment-row" key={comment.id} data-author={comment.authorType}>
+                              <div className="comment-thread" data-author={comment.authorType}>
+                                {commentSection ? <p className="comment-context">{commentSection.headingText}</p> : null}
+                                <p>{comment.body}</p>
+                                <p className="comment-timestamp">
+                                  {formatShortTimestamp(comment.createdAt)}
+                                </p>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className="empty-thread">
+                        Nothing here yet. Select a section or write about the document to get started.
+                      </p>
+                    )}
+                  </div>
+
+                  <form className="discussion-composer" onSubmit={(event) => void handleComposerSubmit(event)}>
+                    <div className="composer-utility-row">
+                      {attachedSection ? (
+                        <div className="composer-context composer-context-tight">
+                          <span className="context-chip">{attachedSection.headingText}</span>
+                          <button className="text-button" type="button" onClick={() => attachSection(null)}>
+                            Clear
+                          </button>
+                        </div>
+                      ) : <span />}
+                      {hasRemoteUpdate ? (
+                        <div className="discussion-actions discussion-actions-compact">
+                          <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
+                            Reload
+                          </button>
+                        </div>
+                      ) : <span />}
+                    </div>
+                    {hasRemoteUpdate ? (
+                      <div className="discussion-status-inline">
+                        <span className="status-pill">Updated</span>
+                        <span className="context-subtle">A newer document version is available.</span>
+                      </div>
+                    ) : null}
+                    {error ? <p className="rail-error-inline">{error}</p> : null}
+                    <div className="composer-row">
+                      <textarea
+                        ref={composerRef}
+                        className="composer-input"
+                        rows={1}
+                        value={composerBody}
+                        onChange={(event) => setComposerBody(event.target.value)}
+                        placeholder={attachedSection ? `Message about ${attachedSection.headingText}...` : 'Reply about the document...'}
+                      />
+                      <button className="primary-button composer-submit" type="submit" disabled={submitting}>
+                        {submitting ? '...' : '➤'}
+                      </button>
+                    </div>
+                  </form>
+                </div>
+              </aside>
+            </div>
+          </>
+        ) : null}
+      </div>
     </main>
   );
 }
