@@ -7,6 +7,7 @@ import { marked } from 'marked';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '..');
+const SOURCE_ROOT = path.resolve(ROOT_DIR, '..');
 const DATA_DIR = path.join(ROOT_DIR, '.workshop-data');
 const DATA_FILE = path.join(DATA_DIR, 'comments.json');
 const PORT = Number(process.env.WORKSHOP_SERVER_PORT ?? 4174);
@@ -36,14 +37,14 @@ function resolveArtifactPath(inputPath) {
   const candidate = inputPath && inputPath.trim() ? inputPath.trim() : DEFAULT_ARTIFACT_PATH;
   const resolved = path.resolve(ROOT_DIR, candidate);
 
-  if (!resolved.startsWith(`${ROOT_DIR}${path.sep}`) && resolved !== ROOT_DIR) {
-    throw new Error('Artifact path must stay inside the workshop repo.');
+  if (!resolved.startsWith(`${SOURCE_ROOT}${path.sep}`) && resolved !== SOURCE_ROOT) {
+    throw new Error('Artifact path must stay inside the source workspace.');
   }
 
   return {
     requestedPath: candidate,
     absolutePath: resolved,
-    relativePath: path.relative(ROOT_DIR, resolved)
+    relativePath: path.relative(SOURCE_ROOT, resolved)
   };
 }
 
@@ -188,6 +189,7 @@ app.get('/api/health', (_request, response) => {
   response.json({
     ok: true,
     rootDir: ROOT_DIR,
+    sourceRoot: SOURCE_ROOT,
     defaultArtifactPath: DEFAULT_ARTIFACT_PATH
   });
 });
@@ -244,7 +246,7 @@ app.post('/api/comments', async (request, response) => {
 
     await writeStore(store);
 
-    const artifact = await loadArtifactPayload(relativePath);
+    const artifact = await loadArtifactPayload(artifactPath);
     response.json({ artifact });
   } catch (error) {
     response.status(400).json({

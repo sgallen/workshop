@@ -52,6 +52,9 @@ export function App() {
   }, [artifact]);
 
   const attachedSection = attachedSectionId ? sectionById.get(attachedSectionId) ?? null : null;
+  const documentComments = useMemo(() => {
+    return (artifact?.comments ?? []).filter((comment) => !comment.sectionId);
+  }, [artifact]);
 
   useEffect(() => {
     void loadArtifact(artifactPath);
@@ -119,6 +122,26 @@ export function App() {
       document.documentElement.style.removeProperty('--viewport-offset');
     };
   }, []);
+
+  useEffect(() => {
+    const composer = composerRef.current;
+
+    if (!composer) {
+      return;
+    }
+
+    const computed = window.getComputedStyle(composer);
+    const lineHeight = Number.parseFloat(computed.lineHeight) || 20;
+    const paddingTop = Number.parseFloat(computed.paddingTop) || 0;
+    const paddingBottom = Number.parseFloat(computed.paddingBottom) || 0;
+    const borderTop = Number.parseFloat(computed.borderTopWidth) || 0;
+    const borderBottom = Number.parseFloat(computed.borderBottomWidth) || 0;
+    const maxHeight = (lineHeight * 6) + paddingTop + paddingBottom + borderTop + borderBottom;
+
+    composer.style.height = 'auto';
+    composer.style.height = `${Math.min(composer.scrollHeight, maxHeight)}px`;
+    composer.style.overflowY = composer.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [composerBody]);
 
   async function loadArtifact(nextPath: string) {
     setLoading(true);
@@ -318,6 +341,23 @@ export function App() {
                 </article>
               ))}
             </div>
+
+            {documentComments.length > 0 ? (
+              <section className="document-notes">
+                <p className="document-notes-title">Discussion</p>
+                <div className="thread-list">
+                  {documentComments.map((comment) => (
+                    <div className="comment-thread" key={comment.id}>
+                      <p className="comment-author">{comment.authorType}</p>
+                      <p>{comment.body}</p>
+                      <p className="comment-timestamp">
+                        {new Date(comment.createdAt).toLocaleString()}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ) : null}
           </section>
 
           <form className="composer-dock" ref={composerDockRef} onSubmit={(event) => void handleComposerSubmit(event)}>
