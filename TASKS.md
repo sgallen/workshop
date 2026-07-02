@@ -20,33 +20,41 @@ Keep the shared task board for cross-project coordination and repo-level priorit
 
 ### In Progress
 
-#### WS-0001 Stabilize artifact session flow and agent handoff contract
-- **Goal:** Turn the current `workshop` prototype into a cleaner v0 artifact-session loop that an agent can open, a human can review on phone, and both can trust after file changes.
-- **Why now:** The repo has active uncommitted app/server work but no explicit task tracking, and the next highest-value slice is the session/reload/revision/handoff seam rather than more broad UI exploration.
+#### WS-0001 Define and prove the minimal agent-document loop
+- **Goal:** Turn the current `workshop` prototype into a clear v0 loop where an agent opens a document, a human workshops it from phone or laptop, and the document remains the primary object through revision.
+- **Why now:** The UI is credible enough that the highest-value next step is no longer generic polish. It is locking the product around the minimal compelling document+agent loop before adding broader features.
 - **Acceptance:**
-  - Opening or resuming an artifact session feels stable and explicit.
+  - Opening or resuming a document session feels stable and explicit.
   - File changes outside the page can be detected and reloaded cleanly.
-  - Revision/history behavior is understandable from the artifact view.
-  - The agent-facing handoff contract is explicit enough that opening an artifact in Workshop does not depend on Scott-specific path knowledge leaking into the user experience.
+  - Revision/history behavior is understandable from the document view.
+  - The agent-facing handoff contract is explicit enough that opening a document in Workshop does not depend on Scott-specific path knowledge leaking into the user experience.
+  - The v1 agent loop is concrete enough to guide implementation instead of more abstract product discussion.
 - **Key files:**
   - `server/server.mjs`
   - `src/App.tsx`
   - `src/styles.css`
   - `README.md`
   - `docs/v0-technical-plan.md`
+  - `docs/project-brief.md`
 - **Current focus:**
-  - Add explicit artifact metadata/reload behavior.
-  - Tighten artifact/session UI around revision awareness.
+  - Clarify the product around agent-native document workshopping.
+  - Add explicit document metadata/reload behavior.
+  - Tighten document/session UI around revision awareness.
   - Clarify the handoff shape from agent -> Workshop link -> human review.
+  - Define the minimum useful agent actions for v1.
 
 ### Ready
 
-#### WS-0002 Define revision history and reload behavior more crisply
+#### WS-0002 Implement the first concrete agent actions
+- **Goal:** Add the narrow set of section-aware or document-aware agent actions that make the v1 loop genuinely useful.
+- **Notes:** Keep the action set small and opinionated. Do not drift into a generic agent shell.
+
+#### WS-0003 Define revision history and reload behavior more crisply
 - **Goal:** Make the user-facing model for "what changed" and "what needs reload" obvious once the core session flow is stable.
 - **Notes:** Likely follows directly after WS-0001 unless it is fully absorbed there.
 
-#### WS-0003 Capture minimal agent-open contract for Workshop artifacts
-- **Goal:** Document the smallest durable contract for how an agent opens an artifact in Workshop without exposing local path complexity.
+#### WS-0004 Capture minimal agent-open contract for Workshop documents
+- **Goal:** Document the smallest durable contract for how an agent opens a document in Workshop without exposing local path complexity.
 - **Notes:** This may land as a short doc/README slice once the implementation shape is proven.
 
 ### Blocked

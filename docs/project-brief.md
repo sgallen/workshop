@@ -2,7 +2,7 @@
 
 ## One-Line Description
 
-Workshop is a local-first collaboration surface where a human and an agent can iteratively refine artifacts together.
+Workshop is the native way to workshop documents with an agent.
 
 ## Core Insight
 
@@ -10,39 +10,40 @@ Chat is a good place to begin.
 
 It is often a bad place to refine.
 
-The moment a conversation turns into a real artifact, the center of gravity should move from the chat thread to the artifact itself.
+The moment a conversation turns into a real document, the center of gravity should move from the chat thread to the document itself.
 
 That is the core reason Workshop should exist.
 
 ## Core Promise
 
-Start in chat. Shift into a focused artifact workspace when the idea becomes real.
+Start with intent. Shift into a focused document workspace where a human and agent can shape the document together.
 
 ## Problem
 
-Current chat surfaces are weak for iterative artifact work.
+Current chat surfaces are weak for iterative document work with agents.
 
 Problems include:
 
-- long Markdown documents are awkward to review in chat
+- chat tools make the conversation primary and the document secondary
+- long Markdown documents are awkward to review or direct in chat
 - comments are detached from the exact section they refer to
-- rendered output is hard to inspect or refine
 - revision requests get scattered across message threads
+- agent output is hard to inspect or refine in document form
 - phone-based iteration is especially clumsy
 
-The result is that artifact work becomes slow, fuzzy, and frustrating just when clarity matters most.
+The result is that document work becomes slow, fuzzy, and frustrating just when clarity matters most.
 
 ## Primary User Stories
 
-### 1. Idea -> artifact -> refinement
+### 1. Idea -> draft -> document workshop
 
 A human comes with an idea.
 
 The human and agent discuss it in chat.
 
-The agent produces an initial artifact such as a Markdown brief or HTML artifact.
+The agent produces an initial document draft.
 
-The pair then decide the artifact needs iteration.
+The pair then decide the document needs real iteration.
 
 The agent shares a link to Workshop.
 
@@ -50,11 +51,11 @@ The human opens the link on phone or laptop and comments on specific sections or
 
 The agent revises the actual underlying file.
 
-The pair continue until the artifact is polished.
+The pair continue until the document is polished.
 
-### 2. Existing artifact -> refinement
+### 2. Existing document -> refinement
 
-A human comes with an existing Markdown file or other artifact and says, in effect, "let's refine this."
+A human comes with an existing Markdown file and says, in effect, "let's refine this."
 
 The agent opens it in Workshop and shares a link.
 
@@ -62,14 +63,15 @@ The human reviews, comments, and steers changes in context.
 
 The agent updates the real file.
 
-Revision history stays attached to the artifact instead of being lost inside chat.
+Revision history stays attached to the document instead of being lost inside chat.
 
 ## Product Shape
 
 Workshop should be:
 
 - local-first
-- artifact-centered
+- document-centered
+- agent-native
 - file-backed
 - linkable
 - usable from phone or laptop
@@ -77,14 +79,23 @@ Workshop should be:
 
 The first-class objects are likely:
 
-- artifact
+- document
 - section or region
 - comment thread
 - proposed revision
 - applied revision
 - session link
 
-This is a collaboration surface, not just a viewer and not just another chat UI.
+This is a native document workshop, not just a viewer and not just another chat UI.
+
+## Product Principles
+
+- the document is the center of gravity
+- the agent is essential to the workflow
+- the human keeps final judgment
+- the product should feel native on phone and laptop
+- local-first is the default
+- provider and agent runtime should remain pluggable
 
 ## v0 Scope
 
@@ -97,20 +108,30 @@ Focus on:
 - rendered reading view
 - source-aware structure
 - section-level comments
+- section-aware agent interaction
 - agent revisions to the underlying file
 - diffs and revision history
 - Tailscale-friendly access
 - simple link-based handoff from chat
 
-## Near-Term Expansion Path
+The key thing v0 must prove is not "can we render docs nicely."
 
-After Markdown-first collaboration works well, likely expansion is:
+It must prove:
 
-1. HTML artifacts
-2. richer region targeting
-3. image review/comment workflows
+- a human wants to workshop a real document in this surface
+- agent-directed iteration feels more natural here than in chat
+- the document remains primary throughout the loop
 
-That order matters. Markdown solves the current pain most directly and with the least scope risk.
+## Future Product Possibilities
+
+After the Markdown-first agent-document loop works well, likely product expansion is:
+
+1. richer agent actions against sections and full documents
+2. cross-device continuity, sync, and backup
+3. collaboration and shared document workflows
+4. richer region targeting and additional artifact types
+
+That order matters. The agent-document loop solves the current pain most directly and with the least scope risk.
 
 ## Non-Goals
 
@@ -118,28 +139,29 @@ That order matters. Markdown solves the current pain most directly and with the 
 - not a general knowledge base
 - not a full office suite
 - not a generic project-management platform
+- not a generic editor with AI bolted on
 - not a broad multimodal creation tool from day one
-- not a huge collaborative framework trying to serve every team shape
 
 ## Product Test
 
-If a human on their phone can move from Telegram to a clean artifact-specific workspace and productively steer revisions, the product is solving something real.
+If a human can move from chat into Workshop, direct an agent against a real document, and productively steer revisions from phone or laptop, the product is solving something real.
 
-If the experience still feels like "chat, but slightly different," it is missing the point.
+If the experience still feels like "chat, but slightly different," or "an editor with an assistant sidebar," it is missing the point.
 
 ## Why This Is Worth Building
 
 This is useful for us, but it should not only be for us.
 
-The broader opportunity is a general human-agent collaboration pattern:
+The broader opportunity is a general human-agent document pattern:
 
 - chat to initiate
-- artifact workspace to refine
-- real files underneath
+- document workspace to refine
+- agent helps shape the doc
+- real files sit underneath
 - local-first by default
 
 That pattern should be relevant for many human-agent pairs without becoming a bloated universal platform.
 
 ## Working Direction
 
-Build the smallest credible version that makes Markdown-first artifact refinement genuinely better than doing the same work in chat.
+Build the smallest credible version that makes Markdown-first document workshopping with an agent genuinely better than doing the same work in chat.

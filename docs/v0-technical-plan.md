@@ -2,16 +2,16 @@
 
 ## Goal
 
-Prove the smallest end-to-end loop that makes artifact refinement better than doing the same work in chat.
+Prove the smallest end-to-end loop that makes document workshopping with an agent better than doing the same work in chat.
 
 The loop is:
 
 1. open a Markdown file for collaboration
 2. get a shareable local/Tailscale link
 3. open the artifact comfortably on phone
-4. comment on a specific section
+4. direct the agent against a specific section or the full document
 5. let the agent revise the underlying file
-6. show the updated result and revision history
+6. review the updated result and revision history
 
 ## Hard Constraints
 
@@ -21,6 +21,7 @@ The loop is:
 - real files are the source of truth
 - Markdown first
 - single human + single agent is enough for v0
+- the document stays primary throughout the loop
 
 ## Proposed Stack
 
@@ -51,7 +52,7 @@ Use a small TypeScript web app with one local server.
 
 This is not the moment to optimize for SSR cleverness or a big framework.
 
-## v0 Artifact Model
+## v0 Document Model
 
 The first supported artifact type is Markdown.
 
@@ -63,13 +64,13 @@ Each artifact should have:
 - section index derived from headings
 - revision history
 
-v0 should identify comment targets by section, not arbitrary text ranges.
+v0 should identify interaction targets by section, not arbitrary text ranges.
 
-That is less powerful than full inline annotation, but much simpler and probably enough to prove usefulness.
+That is less powerful than full inline annotation, but much simpler and probably enough to prove the loop.
 
 ## v0 Data Model
 
-### Artifact Session
+### Document Session
 
 Represents an open collaboration context for a real file.
 
@@ -137,13 +138,13 @@ Fields:
 2. create or resume an artifact session
 3. return a stable URL
 4. render the file on mobile
-5. show a section list and comment affordance
+5. show a section list and an obvious path to direct the agent in context
 
-### Flow 2: Comment On Section
+### Flow 2: Direct Agent On Section
 
 1. tap a section
 2. view its existing thread or create a new one
-3. add a comment
+3. ask for a change, critique, rewrite, or refinement
 4. show thread state immediately
 
 ### Flow 3: Agent Applies Revision
@@ -177,11 +178,11 @@ The contract should be:
 2. Workshop opens or resumes an artifact session for that path
 3. Workshop returns a stable artifact URL
 4. the human lands directly in the artifact view
-5. the UI exposes artifact identity and revision state without exposing local-path complexity
+5. the UI exposes document identity and revision state without exposing local-path complexity
 
 This contract matters because the user experience should feel like:
 
-- "open this artifact in Workshop"
+- "open this document in Workshop"
 
 not:
 
@@ -191,8 +192,32 @@ Implications for v0:
 
 - session identity should be stable enough for reopen/resume behavior
 - path resolution belongs at the server boundary, not in the shared human-facing flow
-- artifact metadata should support reload/revision awareness
+- document metadata should support reload/revision awareness
 - the returned link should be the primary object an agent shares back into chat
+
+## Minimal Compelling v1 Agent Loop
+
+v1 does not need a broad agent platform.
+
+It needs one compelling loop:
+
+1. open or create a Markdown document
+2. select a section or stay at document scope
+3. tell the agent what kind of help is needed
+4. receive a concrete revision to the underlying file
+5. review the updated document in place
+6. iterate
+
+The agent actions can stay narrow at first. Useful examples:
+
+- improve clarity
+- tighten structure
+- rewrite this section
+- critique the argument
+- propose a better outline
+- expand this area
+
+If this loop feels better than doing the same work in chat, v0 is working.
 
 ## Mobile-First UX Shape
 
@@ -225,7 +250,7 @@ Requirements:
 - clear display of the shareable Tailscale URL
 - no cloud dependency for the core loop
 
-The core test is whether the link is easy to open from Telegram on phone and immediately useful.
+The core test is whether the link is easy to open from chat on phone and immediately useful for agent-document iteration.
 
 ## State Storage
 
@@ -258,6 +283,7 @@ Full inline text anchoring can come later.
 - rich image annotation
 - arbitrary DOM region annotation
 - cloud sync
+- generic agent marketplace behavior
 - generalized chat inside the app
 
 ## Initial Implementation Order
