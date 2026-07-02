@@ -122,6 +122,26 @@ It must prove:
 - agent-directed iteration feels more natural here than in chat
 - the document remains primary throughout the loop
 
+## First Concrete Agent Actions
+
+The first version should prove a tight, opinionated action set instead of a generic agent surface.
+
+Recommended v1 actions:
+
+- `critique_document`: give document-level feedback and next steps
+- `rewrite_section`: replace one selected section with stronger text
+- `propose_outline`: suggest a better structure for the document or selected region
+- `expand_section`: deepen a thin section in place
+- `summarize_open_threads`: condense unresolved comment threads into a next-pass plan
+
+These actions are enough to validate the product thesis:
+
+- the document stays primary
+- the agent remains useful
+- the human can steer concrete revisions from inside the document
+
+If these actions work well, Workshop is proving a real product shape rather than just accumulating UI polish.
+
 ## Future Product Possibilities
 
 After the Markdown-first agent-document loop works well, likely product expansion is:

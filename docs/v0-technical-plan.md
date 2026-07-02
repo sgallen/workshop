@@ -217,6 +217,42 @@ The agent actions can stay narrow at first. Useful examples:
 - propose a better outline
 - expand this area
 
+### First Concrete Agent Actions
+
+To keep v1 opinionated, Workshop should start with a very small action set.
+
+Recommended first actions:
+
+1. `critique_document`
+   - Scope: whole document
+   - Returns: a compact critique plus suggested next edits
+
+2. `rewrite_section`
+   - Scope: one selected section
+   - Returns: replacement section text with a short rationale
+
+3. `propose_outline`
+   - Scope: whole document or selected region
+   - Returns: an alternative structure or outline
+
+4. `expand_section`
+   - Scope: one selected section
+   - Returns: an expanded version of the selected section
+
+5. `summarize_open_threads`
+   - Scope: current document session
+   - Returns: a summary of unresolved comments and likely next moves
+
+These actions are enough to test whether Workshop is genuinely better than chat for document refinement.
+
+They also give the product a concrete boundary:
+
+- not a generic "ask the agent anything" surface
+- not a broad tool-using agent shell
+- not a free-form prompt box with no product opinion
+
+Each action should feel like a document-native move, not just a chat prompt in a different container.
+
 If this loop feels better than doing the same work in chat, v0 is working.
 
 ## Mobile-First UX Shape
