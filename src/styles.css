@@ -152,6 +152,7 @@ select {
 }
 
 .toolbar-meta,
+.comment-timestamp,
 .context-subtle,
 .empty-thread,
 .error-banner {
@@ -252,6 +253,7 @@ textarea.path-input {
 }
 
 .reader-actions {
+  display: flex;
   align-items: center;
   flex-shrink: 0;
 }
@@ -761,6 +763,13 @@ textarea.path-input {
 
 .comment-thread p + p {
   margin-top: 6px;
+}
+
+.comment-timestamp {
+  font-size: 0.76rem;
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+  opacity: 0.9;
 }
 
 .comment-row[data-author='human'] .comment-context {

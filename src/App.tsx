@@ -73,6 +73,15 @@ function formatRecentDate(value: string) {
   }).format(new Date(value));
 }
 
+function formatArtifactTimestamp(value: string) {
+  return new Intl.DateTimeFormat(undefined, {
+    month: 'short',
+    day: 'numeric',
+    hour: 'numeric',
+    minute: '2-digit'
+  }).format(new Date(value));
+}
+
 function formatRecentActivity(recent: RecentArtifact) {
   if (recent.lastDiscussedAt) {
     return `Discussed ${formatRecentDate(recent.lastDiscussedAt)}`;
@@ -770,6 +779,7 @@ export function App() {
                               <div className="comment-thread" data-author={comment.authorType}>
                                 {commentSection ? <p className="comment-context">{commentSection.headingText}</p> : null}
                                 <p>{comment.body}</p>
+                                <p className="comment-timestamp">{formatArtifactTimestamp(comment.createdAt)}</p>
                               </div>
                             </div>
                           );
