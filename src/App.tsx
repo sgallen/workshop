@@ -37,6 +37,24 @@ type RecentArtifact = {
 };
 
 const DEFAULT_ARTIFACT_PATH = 'docs/project-brief.md';
+const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
+  {
+    title: 'v0-technical-plan.md',
+    relativePath: 'workshop/docs/v0-technical-plan.md',
+    updatedAt: null,
+    lastOpenedAt: null,
+    lastDiscussedAt: null,
+    commentCount: 0
+  },
+  {
+    title: 'board-format.md',
+    relativePath: 'tasks/docs/board-format.md',
+    updatedAt: null,
+    lastOpenedAt: null,
+    lastDiscussedAt: null,
+    commentCount: 0
+  }
+];
 
 async function readJsonResponse<T>(response: Response): Promise<T> {
   const raw = await response.text();
@@ -104,7 +122,61 @@ export function App() {
   const conversationComments = artifact?.comments ?? [];
   const resolvedArtifactPath = artifact?.relativePath ?? artifactPath;
   const isPanelOpen = menuOpen || railOpen;
-  const visibleRecentArtifacts = recentArtifacts.filter((recent) => recent.relativePath !== resolvedArtifactPath);
+  const displayedRecentArtifacts = useMemo(() => {
+    if (!artifact) {
+      if (recentArtifacts.length >= 3) {
+        return recentArtifacts;
+      }
+
+      const seen = new Set(recentArtifacts.map((recent) => recent.relativePath));
+      const seeded = [...recentArtifacts];
+
+      for (const candidate of DEMO_RECENT_CANDIDATES) {
+        if (seen.has(candidate.relativePath)) {
+          continue;
+        }
+
+        seeded.push(candidate);
+        seen.add(candidate.relativePath);
+
+        if (seeded.length >= 3) {
+          break;
+        }
+      }
+
+      return seeded;
+    }
+
+    const activeRecent = recentArtifacts.find((recent) => recent.relativePath === artifact.relativePath) ?? {
+      title: artifact.title,
+      relativePath: artifact.relativePath,
+      updatedAt: artifact.updatedAt,
+      lastOpenedAt: artifact.updatedAt,
+      lastDiscussedAt: null,
+      commentCount: conversationComments.length
+    };
+
+    const seeded = [
+      activeRecent,
+      ...recentArtifacts.filter((recent) => recent.relativePath !== artifact.relativePath)
+    ];
+    const seen = new Set(seeded.map((recent) => recent.relativePath));
+
+    for (const candidate of DEMO_RECENT_CANDIDATES) {
+      if (seen.has(candidate.relativePath) || candidate.relativePath === artifact.relativePath) {
+        continue;
+      }
+
+      seeded.push(candidate);
+      seen.add(candidate.relativePath);
+
+      if (seeded.length >= 3) {
+        break;
+      }
+    }
+
+    return seeded;
+  }, [artifact, recentArtifacts, conversationComments.length]);
 
   useEffect(() => {
     void loadArtifact(artifactPath);
@@ -337,6 +409,9 @@ export function App() {
           <div className="workspace-menu-header">
             <div className="workspace-brand-lockup">
               <div className="workspace-logo-mark" aria-hidden="true">W</div>
+              <div className="workspace-brand-copy">
+                <p className="workspace-brand-name">Workshop</p>
+              </div>
             </div>
             <button className="workspace-menu-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu">
               ×
@@ -348,16 +423,17 @@ export function App() {
               <p className="section-label workspace-menu-label">Recents</p>
             </div>
 
-            {visibleRecentArtifacts.length > 0 ? (
+            {displayedRecentArtifacts.length > 0 ? (
               <div className="recent-list" role="list">
-                {visibleRecentArtifacts.map((recent) => {
+                {displayedRecentArtifacts.map((recent) => {
                   return (
                     <button
                       key={recent.relativePath}
                       className="recent-item"
-                      data-active="false"
+                      data-active={recent.relativePath === resolvedArtifactPath ? 'true' : 'false'}
                       type="button"
                       onClick={() => handleOpenArtifact(recent.relativePath)}
+                      aria-current={recent.relativePath === resolvedArtifactPath ? 'page' : undefined}
                     >
                       <span className="recent-item-topline">
                         <span className="recent-item-title">{recent.title}</span>
@@ -463,12 +539,6 @@ export function App() {
                   </button>
                 </div>
               </div>
-              <div className="reader-link-row" aria-label="Artifact metadata">
-                <p className="reader-inline-meta">
-                  <span>{conversationComments.length} {conversationComments.length === 1 ? 'message' : 'messages'}</span>
-                  <span>Synced {formatShortTimestamp(artifact.updatedAt)}</span>
-                </p>
-              </div>
               {hasRemoteUpdate ? (
                 <div className="reader-status-banner">
                   <span className="status-pill">Document updated</span>
@@ -500,14 +570,6 @@ export function App() {
               <aside className={`discussion-rail${railOpen ? ' discussion-rail-open' : ''}`} aria-label="Discussion">
                 <div className="discussion-rail-panel">
                   <div className="discussion-rail-header">
-                    <div className="discussion-copy">
-                      <p className="discussion-title">Discussion</p>
-                      <p className="discussion-subtitle">
-                        {conversationComments.length > 0
-                          ? `${conversationComments.length} ${conversationComments.length === 1 ? 'message' : 'messages'} on this artifact`
-                          : 'Start the thread for this artifact'}
-                      </p>
-                    </div>
                     <div className="discussion-header-actions">
                       <button
                         className="secondary-button compact-button discussion-header-button"
@@ -518,11 +580,12 @@ export function App() {
                         {checkingUpdates ? 'Refreshing...' : 'Refresh'}
                       </button>
                       <button
-                        className="secondary-button compact-button discussion-header-button"
+                        className="workspace-menu-close"
                         type="button"
                         onClick={() => setRailOpen(false)}
+                        aria-label="Close discussion"
                       >
-                        Close
+                        ×
                       </button>
                     </div>
                   </div>
