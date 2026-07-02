@@ -41,8 +41,6 @@ async function readJsonResponse<T>(response: Response): Promise<T> {
 
 function formatShortTimestamp(value: string) {
   return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
     hour: 'numeric',
     minute: '2-digit'
   }).format(new Date(value));
@@ -115,6 +113,35 @@ export function App() {
       window.clearInterval(intervalId);
     };
   }, [artifactPath, artifact, railOpen, lastLoadedUpdatedAt]);
+
+  useEffect(() => {
+    if (!railOpen) {
+      return;
+    }
+
+    const { body, documentElement } = document;
+    const scrollY = window.scrollY;
+    const previousBodyPosition = body.style.position;
+    const previousBodyTop = body.style.top;
+    const previousBodyWidth = body.style.width;
+    const previousBodyOverflow = body.style.overflow;
+    const previousHtmlOverflow = documentElement.style.overflow;
+
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+    documentElement.style.overflow = 'hidden';
+
+    return () => {
+      body.style.position = previousBodyPosition;
+      body.style.top = previousBodyTop;
+      body.style.width = previousBodyWidth;
+      body.style.overflow = previousBodyOverflow;
+      documentElement.style.overflow = previousHtmlOverflow;
+      window.scrollTo(0, scrollY);
+    };
+  }, [railOpen]);
 
   async function loadArtifact(nextPath: string) {
     setLoading(true);
@@ -339,14 +366,18 @@ export function App() {
                   </div>
                   <div className="discussion-header-actions">
                     <button
-                      className="secondary-button discussion-header-button"
+                      className="secondary-button compact-button discussion-header-button"
                       type="button"
                       onClick={() => void checkForRemoteUpdate()}
                       disabled={checkingUpdates}
                     >
                       {checkingUpdates ? 'Refreshing...' : 'Refresh'}
                     </button>
-                    <button className="secondary-button discussion-header-button" type="button" onClick={() => setRailOpen(false)}>
+                    <button
+                      className="secondary-button compact-button discussion-header-button"
+                      type="button"
+                      onClick={() => setRailOpen(false)}
+                    >
                       Close
                     </button>
                   </div>
@@ -364,7 +395,7 @@ export function App() {
                               {commentSection ? <p className="comment-context">{commentSection.headingText}</p> : null}
                               <p>{comment.body}</p>
                               <p className="comment-timestamp">
-                                {new Date(comment.createdAt).toLocaleString()}
+                                {formatShortTimestamp(comment.createdAt)}
                               </p>
                             </div>
                           </div>

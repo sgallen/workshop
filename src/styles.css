@@ -431,6 +431,7 @@ select {
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  overscroll-behavior: contain;
   border-radius: 30px;
   background: rgba(255, 255, 255, 0.94);
 }
@@ -474,6 +475,8 @@ select {
 .discussion-thread {
   flex: 1 1 auto;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
   padding: 10px 14px 12px;
 }
 
@@ -530,6 +533,8 @@ select {
 
 .comment-thread p {
   margin: 0;
+  font-size: 0.98rem;
+  line-height: 1.45;
 }
 
 .comment-thread p + p {
@@ -541,7 +546,11 @@ select {
 }
 
 .comment-timestamp {
-  font-size: 0.76rem;
+  margin-top: 8px;
+  font-size: 0.7rem;
+  line-height: 1.2;
+  letter-spacing: 0.01em;
+  opacity: 0.72;
 }
 
 .comment-row[data-author='human'] .comment-timestamp {
@@ -625,11 +634,6 @@ select {
   font-size: 0.82rem;
   font-weight: 700;
   padding: 0;
-}
-
-.discussion-header-button {
-  min-height: 42px;
-  padding: 0 16px;
 }
 
 .discussion-actions-compact {
@@ -838,11 +842,15 @@ select {
     font-size: 0.76rem;
   }
 
+  .comment-thread p {
+    font-size: 0.94rem;
+  }
+
   .comment-timestamp,
   .empty-thread,
   .context-subtle,
   .rail-error-inline {
-    font-size: 0.82rem;
+    font-size: 0.76rem;
     line-height: 1.35;
   }
 
@@ -857,11 +865,6 @@ select {
 
   .discussion-actions-compact {
     gap: 6px;
-  }
-
-  .discussion-header-button {
-    min-height: 48px;
-    padding: 0 16px;
   }
 
   .compact-button {
