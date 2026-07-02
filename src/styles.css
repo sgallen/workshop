@@ -2,17 +2,17 @@
   color-scheme: light;
   --app-viewport-height: 100vh;
   --app-viewport-offset-top: 0px;
-  --bg: #f3f7f4;
+  --bg: #f4f1eb;
   --paper: #ffffff;
-  --paper-soft: #fbfcfa;
+  --paper-soft: #fcfaf7;
   --ink: #17221b;
   --muted: #667085;
   --line: #dfe6df;
   --line-strong: #ced8cf;
-  --accent: #11856a;
-  --accent-strong: #0d6f58;
-  --pill: #e7f5ef;
-  --pill-strong: #d3ece2;
+  --accent: #3e5a8a;
+  --accent-strong: #2e4467;
+  --pill: #eef2f8;
+  --pill-strong: #dee7f4;
   --shadow: 0 18px 48px rgba(16, 24, 40, 0.08);
   --shadow-soft: 0 8px 24px rgba(16, 24, 40, 0.06);
   font-family: "Aptos", "Aptos Display", "Segoe UI Variable", "Helvetica Neue", sans-serif;
@@ -26,8 +26,8 @@ body {
   margin: 0;
   min-width: 320px;
   background:
-    radial-gradient(circle at top, rgba(17, 133, 106, 0.08), transparent 30%),
-    linear-gradient(180deg, #fcfefd 0%, var(--bg) 100%);
+    radial-gradient(circle at top, rgba(62, 90, 138, 0.07), transparent 30%),
+    linear-gradient(180deg, #fffdf9 0%, var(--bg) 100%);
   color: var(--ink);
   scroll-behavior: smooth;
 }
@@ -365,7 +365,7 @@ textarea.path-input {
 .section-card[data-attached='true'] .section-rendered h5,
 .section-card[data-attached='true'] .section-rendered h6 {
   background: rgba(231, 245, 239, 0.95);
-  box-shadow: inset 0 0 0 1px rgba(17, 133, 106, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(62, 90, 138, 0.16);
 }
 
 .section-rendered p,
@@ -405,7 +405,7 @@ textarea.path-input {
 .section-rendered blockquote {
   margin-left: 0;
   padding: 0.2rem 0 0.2rem 1rem;
-  border-left: 3px solid rgba(17, 133, 106, 0.18);
+  border-left: 3px solid rgba(62, 90, 138, 0.18);
   color: #475467;
 }
 
@@ -422,14 +422,14 @@ textarea.path-input {
 .section-rendered pre {
   border: 1px solid rgba(223, 230, 223, 0.96);
   border-radius: 12px;
-  background: #f8faf8;
+  background: #f8f7f4;
   padding: 14px 16px;
 }
 
 .shell-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(244, 248, 245, 0.16);
+  background: rgba(244, 242, 238, 0.18);
   opacity: 0;
   pointer-events: none;
   transition: opacity 160ms ease;
@@ -471,8 +471,8 @@ textarea.path-input {
   border-radius: 0 12px 12px 0;
   box-shadow: 22px 0 48px rgba(16, 24, 40, 0.12);
   background:
-    radial-gradient(circle at top left, rgba(17, 133, 106, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 248, 0.98) 100%);
+    radial-gradient(circle at top left, rgba(62, 90, 138, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 247, 243, 0.98) 100%);
   color: var(--ink);
 }
 
@@ -499,8 +499,8 @@ textarea.path-input {
   width: 36px;
   height: 36px;
   border-radius: 8px;
-  border: 1px solid rgba(17, 133, 106, 0.16);
-  background: linear-gradient(180deg, #f0faf6 0%, #e1f3eb 100%);
+  border: 1px solid rgba(62, 90, 138, 0.16);
+  background: linear-gradient(180deg, #f5f8fd 0%, #e7eef8 100%);
   color: var(--accent-strong);
   font-size: 0.96rem;
   font-weight: 800;
@@ -583,9 +583,9 @@ textarea.path-input {
 }
 
 .recent-item[data-active='true'] {
-  border-color: rgba(17, 133, 106, 0.22);
-  background: linear-gradient(180deg, rgba(240, 250, 246, 0.98) 0%, rgba(230, 244, 237, 0.98) 100%);
-  box-shadow: 0 10px 24px rgba(17, 133, 106, 0.1);
+  border-color: rgba(62, 90, 138, 0.22);
+  background: linear-gradient(180deg, rgba(245, 248, 253, 0.98) 0%, rgba(234, 240, 248, 0.98) 100%);
+  box-shadow: 0 10px 24px rgba(62, 90, 138, 0.1);
 }
 
 .recent-item-topline {
@@ -633,8 +633,8 @@ textarea.path-input {
   margin-top: 0;
   padding: 14px 12px;
   border-radius: 10px;
-  border-color: rgba(17, 133, 106, 0.12);
-  background: rgba(240, 250, 246, 0.84);
+  border-color: rgba(62, 90, 138, 0.12);
+  background: rgba(244, 246, 250, 0.9);
   color: var(--muted);
 }
 
@@ -668,8 +668,8 @@ textarea.path-input {
   border-radius: 12px 0 0 12px;
   box-shadow: -22px 0 48px rgba(16, 24, 40, 0.12);
   background:
-    radial-gradient(circle at top right, rgba(17, 133, 106, 0.12), transparent 28%),
-    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(247, 251, 248, 0.98) 100%);
+    radial-gradient(circle at top right, rgba(62, 90, 138, 0.1), transparent 28%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 247, 243, 0.98) 100%);
 }
 
 .discussion-rail-header,
@@ -735,7 +735,7 @@ textarea.path-input {
 
 .comment-thread[data-author='human'] {
   background: color-mix(in srgb, var(--pill) 72%, white 28%);
-  border-color: rgba(17, 133, 106, 0.12);
+  border-color: rgba(62, 90, 138, 0.12);
   border-top-right-radius: 10px;
 }
 
@@ -746,7 +746,7 @@ textarea.path-input {
   border-radius: 6px;
   background: rgba(235, 240, 236, 0.72);
   padding: 2px 6px;
-  color: color-mix(in srgb, var(--muted) 88%, #6f7f77 12%);
+  color: color-mix(in srgb, var(--muted) 88%, #66728a 12%);
   font-size: 0.63rem;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -774,7 +774,7 @@ textarea.path-input {
 
 .comment-row[data-author='human'] .comment-context {
   background: rgba(255, 255, 255, 0.62);
-  color: color-mix(in srgb, var(--muted) 84%, #668274 16%);
+  color: color-mix(in srgb, var(--muted) 84%, #5f7391 16%);
 }
 
 .empty-thread {
@@ -880,12 +880,12 @@ textarea.path-input {
   min-height: 46px;
   border: 0;
   border-radius: 999px;
-  background: linear-gradient(180deg, #17a37d 0%, var(--accent-strong) 100%);
+  background: linear-gradient(180deg, #4a6ba0 0%, var(--accent-strong) 100%);
   color: #f8fffc;
   font-size: 0.96rem;
   font-weight: 700;
   padding: 0;
-  box-shadow: 0 10px 24px rgba(17, 133, 106, 0.22);
+  box-shadow: 0 10px 24px rgba(62, 90, 138, 0.22);
 }
 
 .secondary-button {
@@ -930,7 +930,7 @@ textarea.path-input {
 .composer-input:focus-visible,
 .text-button:focus-visible {
   outline: none;
-  box-shadow: 0 0 0 4px rgba(17, 133, 106, 0.14);
+  box-shadow: 0 0 0 4px rgba(62, 90, 138, 0.14);
 }
 
 .primary-button:disabled,
