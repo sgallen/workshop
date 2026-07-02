@@ -67,8 +67,6 @@ export function App() {
   const [checkingUpdates, setCheckingUpdates] = useState(false);
   const [hasRemoteUpdate, setHasRemoteUpdate] = useState(false);
   const [lastLoadedUpdatedAt, setLastLoadedUpdatedAt] = useState<string | null>(null);
-  const [appOrigin, setAppOrigin] = useState(window.location.origin);
-  const [shareState, setShareState] = useState<'idle' | 'copied' | 'failed'>('idle');
 
   const sectionById = useMemo(() => {
     return new Map((artifact?.sections ?? []).map((section) => [section.id, section]));
@@ -81,10 +79,6 @@ export function App() {
   useEffect(() => {
     void loadArtifact(artifactPath);
   }, [artifactPath]);
-
-  useEffect(() => {
-    void loadConfig();
-  }, []);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -148,19 +142,6 @@ export function App() {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load artifact.');
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function loadConfig() {
-    try {
-      const response = await fetch('/api/config');
-      const payload = await readJsonResponse<{ appOrigin?: string }>(response);
-
-      if (response.ok && payload.appOrigin) {
-        setAppOrigin(payload.appOrigin);
-      }
-    } catch {
-      // Keep the current browser origin as a harmless fallback.
     }
   }
 
@@ -243,21 +224,6 @@ export function App() {
     await loadArtifact(resolvedArtifactPath);
   }
 
-  async function handleCopyShareLink() {
-    const shareUrl = `${appOrigin}/?path=${encodeURIComponent(resolvedArtifactPath)}`;
-
-    try {
-      await navigator.clipboard.writeText(shareUrl);
-      setShareState('copied');
-    } catch {
-      setShareState('failed');
-    }
-
-    window.setTimeout(() => {
-      setShareState('idle');
-    }, 2500);
-  }
-
   return (
     <main className="app-shell">
       {!artifact ? (
@@ -305,7 +271,7 @@ export function App() {
           <header className="reader-bar">
             <div className="reader-bar-row">
               <div className="reader-meta">
-                <p className="eyebrow">Workshop Session</p>
+                <p className="eyebrow">Workshop</p>
                 <p className="reader-title">{artifact.title}</p>
               </div>
               <div className="reader-actions">
@@ -314,27 +280,21 @@ export function App() {
                     Reload document
                   </button>
                 ) : null}
-                <button className="secondary-button compact-button" type="button" onClick={() => void handleCopyShareLink()}>
-                  Copy share link
-                </button>
                 <button
                   className="secondary-button compact-button reader-rail-button"
                   type="button"
                   onClick={() => setRailOpen((current) => !current)}
                 >
-                  {railOpen ? 'Close discussion' : 'Open discussion'}
+                  {railOpen ? 'Close' : 'Discuss'}
                 </button>
               </div>
             </div>
-            <div className="reader-link-row">
+            <div className="reader-link-row" aria-label="Artifact metadata">
               <p className="reader-link-path">{artifact.relativePath}</p>
-              <div className="reader-meta-pills" aria-label="Artifact metadata">
-                <span className="meta-pill">Markdown</span>
-                <span className="meta-pill">{conversationComments.length} {conversationComments.length === 1 ? 'message' : 'messages'}</span>
-                <span className="meta-pill meta-pill-muted">Synced {formatShortTimestamp(artifact.updatedAt)}</span>
-                {shareState === 'copied' ? <span className="meta-pill meta-pill-muted">Link copied</span> : null}
-                {shareState === 'failed' ? <span className="meta-pill meta-pill-muted">Copy failed</span> : null}
-              </div>
+              <p className="reader-inline-meta">
+                <span>{conversationComments.length} {conversationComments.length === 1 ? 'message' : 'messages'}</span>
+                <span>Synced {formatShortTimestamp(artifact.updatedAt)}</span>
+              </p>
             </div>
             {hasRemoteUpdate ? (
               <div className="reader-status-banner">

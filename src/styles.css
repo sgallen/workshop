@@ -160,10 +160,10 @@ select {
   top: max(8px, env(safe-area-inset-top));
   z-index: 10;
   margin-top: 2px;
-  margin-bottom: 18px;
-  padding: 14px 16px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
   border: 1px solid rgba(223, 230, 223, 0.98);
-  border-radius: 26px;
+  border-radius: 22px;
   background: rgba(255, 255, 255, 0.82);
   box-shadow: 0 10px 28px rgba(16, 24, 40, 0.08);
   backdrop-filter: blur(14px);
@@ -192,6 +192,10 @@ select {
   justify-content: flex-end;
 }
 
+.reader-actions {
+  flex-shrink: 0;
+}
+
 .reader-status-banner {
   display: flex;
   align-items: center;
@@ -204,19 +208,35 @@ select {
 
 .reader-link-row {
   display: flex;
-  align-items: center;
+  align-items: baseline;
   justify-content: space-between;
   gap: 10px;
   flex-wrap: wrap;
-  margin-top: 10px;
+  margin-top: 4px;
 }
 
 .reader-link-path {
   margin: 0;
   color: var(--muted);
-  font-size: 0.9rem;
+  font-size: 0.84rem;
   line-height: 1.4;
   word-break: break-all;
+}
+
+.reader-inline-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
+.reader-inline-meta span {
+  white-space: nowrap;
 }
 
 .reader-meta-pills {
@@ -657,9 +677,9 @@ select {
 }
 
 .compact-button {
-  min-height: 42px;
-  font-size: 0.88rem;
-  padding: 0 15px;
+  min-height: 36px;
+  font-size: 0.84rem;
+  padding: 0 13px;
 }
 
 .primary-button,
@@ -717,7 +737,7 @@ select {
   }
 
   .reader-bar {
-    padding: 16px 18px;
+    padding: 12px 14px;
   }
 
   .path-row {
@@ -756,9 +776,37 @@ select {
 @media (max-width: 759px) {
   .reader-bar {
     top: max(6px, env(safe-area-inset-top));
-    margin-bottom: 16px;
-    padding: 12px 13px;
-    border-radius: 22px;
+    margin-bottom: 12px;
+    padding: 10px 11px;
+    border-radius: 20px;
+  }
+
+  .reader-bar-row {
+    align-items: flex-start;
+  }
+
+  .reader-title {
+    font-size: 0.98rem;
+  }
+
+  .reader-link-row {
+    gap: 4px;
+    margin-top: 2px;
+  }
+
+  .reader-link-path,
+  .reader-inline-meta {
+    width: 100%;
+  }
+
+  .reader-inline-meta {
+    justify-content: flex-start;
+    gap: 10px;
+    font-size: 0.78rem;
+  }
+
+  .eyebrow {
+    margin-bottom: 4px;
   }
 
   .discussion-rail {
@@ -790,10 +838,6 @@ select {
     font-size: 0.76rem;
   }
 
-  .reader-link-row {
-    align-items: flex-start;
-  }
-
   .comment-timestamp,
   .empty-thread,
   .context-subtle,
@@ -818,5 +862,10 @@ select {
   .discussion-header-button {
     min-height: 48px;
     padding: 0 16px;
+  }
+
+  .compact-button {
+    min-height: 34px;
+    padding: 0 11px;
   }
 }
