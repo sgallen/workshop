@@ -1,176 +1,173 @@
 # Workshop
 
-Workshop is a local-first collaboration surface for humans and agents to refine artifacts together.
+Workshop is the native way to workshop documents with an agent.
 
-Start in chat. Shift into a focused artifact workspace when the idea becomes real.
+It exists for the moment when chat stops being the right place to work and the document itself becomes the center of gravity.
 
-## What It Does
-
-Workshop is for the moment when a conversation stops being just a conversation and turns into something you want to shape:
-
-- a product brief
-- a note
-- a plan
-- a proposal
-- an HTML artifact
-- eventually, maybe an image
-
-Instead of smearing revision work across chat, Workshop gives the human and the agent a shared place to iterate on the artifact itself.
-
-## Why
+## Core Idea
 
 Chat is good for starting.
 
 Chat is often bad for refining.
 
-That becomes obvious when:
+Once there is a real draft, brief, proposal, note, or plan, revision work should move into a document-first workspace where a human and agent can shape the artifact together.
 
-- the artifact is longer than a few paragraphs
-- you want to comment on a specific section
-- you want to see rendered output
-- you want revision history tied to the file
-- you are on your phone and need a clean focused view
+That is what Workshop is for.
 
-Workshop exists to bridge that gap.
+## Product Position
+
+Workshop is its own product.
+
+It should own its own document workshopping loop, its own agent/runtime contract, and its own user experience.
+
+Other systems can hand work into Workshop, but they should not sit in the middle of every document turn once the user has entered the workspace.
+
+OpenClaw is an important example:
+
+- OpenClaw can know Workshop exists
+- OpenClaw can help set it up or expose it
+- OpenClaw can open or resume a document in Workshop
+- OpenClaw can return the right link when a user says things like "Let's workshop this doc"
+
+But Workshop should still own the actual document loop.
+
+## The Shift
 
 The intended flow is:
 
 ```text
 talk in chat
 ↓
-an artifact becomes the center of gravity
+a real document becomes the center of gravity
 ↓
-agent shares a link
+an agent or tool opens that document in Workshop
 ↓
-human opens a focused workspace
+the human jumps into a focused document workspace
 ↓
-human comments on the artifact in context
+the human comments, directs, and reviews in context
 ↓
-agent revises the real underlying file
+Workshop runs its own agent loop against the document
 ↓
-both iterate until it is ready
+the pair iterate until the document is ready
 ```
 
-## Core Promise
+The key point is that the handoff into Workshop should be thin, but once the user is inside Workshop, the product should feel self-contained and document-first.
 
-Workshop is not trying to replace chat.
+## Why It Needs To Exist
 
-It is trying to provide a better working mode once the output matters.
+Current chat surfaces are weak for iterative document work with agents.
 
-The promise is simple:
+The problems show up quickly:
 
-- start in chat
-- switch to a focused collaboration surface
-- keep the artifact, comments, and revisions attached to the actual file
+- the conversation stays primary while the document stays secondary
+- long Markdown documents are awkward to review in chat
+- comments lose their exact section context
+- revision requests get scattered across message history
+- agent output is harder to inspect in document form
+- phone-based refinement is especially clumsy
 
-## Minimal Handoff Contract
+Workshop exists to make document refinement feel natural instead of improvised.
 
-For v0, the agent-to-Workshop handoff should stay brutally simple.
+## What Workshop Is
 
-The contract is:
+Workshop is:
 
-1. the agent identifies a real artifact file
-2. the agent asks Workshop to open or resume that artifact as a session
-3. Workshop returns a stable artifact URL
-4. the human opens that URL directly into the artifact view
-5. the human does not need to reason about local paths, repo roots, or shell commands
+- document-centered
+- local-first by default
+- file-backed
+- agent-native
+- linkable
+- comfortable on phone and laptop
+- focused on refinement rather than generic chat
 
-What the human should see:
+The first-class objects are things like:
 
-- a clean artifact title
-- rendered content
-- visible comment and revision state
-- a stable shareable link
-
-What the human should not need to see:
-
-- absolute file paths
-- repo-internal path conventions
-- laptop-specific setup details
-- any distinction between "open file" and "resume session" beyond whether the artifact is already there
-
-What the agent must preserve:
-
-- the underlying file remains the source of truth
-- the handoff link stays artifact-centered, not chat-centered
-- reopening an artifact prefers resuming the same session shape when possible
-- file changes outside the page can be detected and surfaced clearly
-
-## v0 Focus
-
-Workshop should start narrow.
-
-First:
-
-- Markdown documents
-- local-first web UI
-- link-based handoff from chat to workspace
-- section-level comments
-- agent-driven revisions
-- rendered view plus source-aware structure
-- diffs and revision history
-- phone-friendly access over Tailscale
-
-Later:
-
-- HTML artifacts
-- richer block/region targeting
-- image review and feedback
+- document
+- section or region
+- comment thread
+- proposed revision
+- applied revision
+- session link
 
 ## What Workshop Is Not
 
 Workshop is not:
 
-- a generic chat replacement
-- a full collaborative office suite
-- a visual design tool
-- a general workflow platform
-- a multi-agent orchestration product
+- a general chat replacement
+- a generic AI sidebar beside an editor
+- a full office suite
+- a broad multi-agent orchestration platform
+- a general workflow or project-management tool
 
-If it starts trying to do everything, it will stop being useful for the actual problem.
+If it tries to become all of those things, it will lose the product clarity that makes it useful.
 
-## Design Principles
+## Architecture Direction
 
-- Local-first by default.
-- Real files stay the source of truth.
-- The artifact is the first-class object.
-- Comments should attach to sections, blocks, or regions, not float as vague chat blobs.
-- The human should not need to understand repo structure or file paths to collaborate.
-- The workflow should feel natural on both phone and laptop.
+There are two separate seams:
 
-## Primary User Stories
+1. External handoff seam
+2. Internal agent seam
 
-### 1. Idea -> artifact -> refinement
+The external handoff seam is for things like OpenClaw.
 
-- A human brings an idea in chat.
-- An agent creates an initial artifact.
-- The agent shares a link to a focused workspace.
-- The human reviews and comments in context.
-- The agent revises the underlying artifact.
-- The pair iterate until it is polished.
+That contract should stay small:
 
-### 2. Existing artifact -> refinement
+- input: a real document path or identifier
+- optional input: title, source metadata, resume intent
+- output: a stable Workshop URL for the active document session
 
-- A human brings an existing Markdown file or artifact.
-- The agent opens it in Workshop.
-- The human comments on specific sections or regions.
-- The agent applies changes to the real file.
-- The revision flow stays attached to the artifact rather than scattered through chat.
+The internal agent seam belongs to Workshop.
 
-## Planned Repo Shape
+That contract needs to answer things like:
 
-```text
-workshop/
-  AGENTS.md
-  README.md
-  docs/
-    project-brief.md
-  src/
-  examples/
-```
+- how Workshop represents an authenticated agent identity
+- how Workshop knows an agent is available
+- how Workshop issues a request against a document or section
+- whether results come back as critique, replacement text, diff, patch, or full revision
+- how those results are rendered in a document-first way
+
+OpenClaw is useful inspiration for auth and runtime patterns, especially around OpenAI ChatGPT/Codex OAuth, but Workshop should still own its own loop and runtime contract.
+
+## v0 Focus
+
+Workshop should start narrow.
+
+The first version should prove a real end-to-end document loop for:
+
+- Markdown documents
+- a local web app
+- rendered reading view plus source-aware structure
+- section-level comments
+- narrow, useful agent actions
+- revisions against the real underlying file
+- diffs and revision history
+- phone-friendly access
+- simple link-based handoff from chat or another tool
+
+Useful first agent actions are likely:
+
+- improve clarity
+- rewrite this section
+- tighten structure
+- critique this draft
+- propose a better outline
+- expand this area
+
+## Core Promise
+
+Workshop is not trying to replace chat.
+
+It is trying to provide a better mode once the output matters.
+
+The promise is:
+
+- start in chat
+- shift into a focused document workspace
+- keep comments and revisions attached to the real file
+- let the human steer and judge while the agent helps shape the document
 
 ## Status
 
-Workshop is currently a product idea being shaped from real collaboration pain rather than from theory.
+Workshop is currently being shaped from real collaboration pain rather than theory.
 
-The immediate goal is to define a credible v0 that solves Markdown-first artifact refinement well before expanding further.
+The immediate goal is to build the smallest credible Markdown-first version that makes document workshopping with an agent genuinely better than doing the same work in chat.
