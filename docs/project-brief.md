@@ -88,6 +88,34 @@ The first-class objects are likely:
 
 This is a native document workshop, not just a viewer and not just another chat UI.
 
+## Local Runtime Direction
+
+Workshop should be designed so the same product can live in more than one local runtime shape.
+
+The two important shapes are:
+
+1. a hosted local runtime
+   - Workshop runs on a machine
+   - the human may reach it locally or over Tailscale
+   - that machine may also host the local files and the connected agent runtime
+
+2. a device-local runtime
+   - Workshop runs directly on the phone
+   - the app manages its own local state and document interaction
+   - no separate Workshop server is required
+
+The current implementation is the first shape.
+
+That should not be mistaken for the permanent product boundary.
+
+The long-term product should preserve:
+
+- one shared document-first product model
+- more than one local runtime shell
+- optional future server-assisted services for sync, collaboration, backup, or remote execution
+
+Those later services may become useful, but they are not the foundation that v0 should optimize around.
+
 ## Product Principles
 
 - the document is the center of gravity

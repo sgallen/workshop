@@ -2,14 +2,16 @@
 
 ## Purpose
 
-Define the refactor path that lets Workshop evolve from its current single web app + local server shape into:
+Define the smallest refactor path that lets Workshop evolve from its current web-first shape into:
 
-- a shared product core
-- a web/OpenClaw-invoked shell
-- a future first-class native shell
+- a shared local-first product core
+- a hosted local runtime
+  - for example, Workshop installed on an OpenClaw machine and accessed over Tailscale
+- a future device-local runtime
+  - for example, a React Native / Expo app on phone
 
 This plan is intentionally incremental.
-It should improve the current web codebase now while keeping a React Native / Expo future realistic.
+It should improve the current web codebase now without overcomplicating the repo.
 
 This doc is about architecture and execution order.
 For the concrete product interaction model that the refactor should preserve, see `docs/agent-editing-v1-blueprint.md`.
@@ -37,86 +39,99 @@ Today the repo is effectively shaped like this:
 That is fine for v0 speed, but it mixes together:
 
 - product/domain logic
-- runtime adapters
+- runtime-specific logic
 - transport/API logic
 - UI state
 
-If we keep building that way, a native app will force a near-rewrite.
+If we keep building that way, a future device-local app will force a near-rewrite.
+
+## Local-First Runtime Assumption
+
+Workshop should currently be designed around two local runtime shapes:
+
+1. `hosted local runtime`
+   - Workshop runs on a machine
+   - the human may reach it locally or over Tailscale
+   - that machine may also host the local files and the connected agent runtime
+
+2. `device-local runtime`
+   - Workshop runs directly on the phone
+   - no separate Workshop server is required
+   - the app manages its own local state and document interaction
+
+A later server-backed mode for sync, collaboration, backup, or remote execution is possible.
+But that is not the foundation we should optimize around yet.
 
 ## Target Architecture
 
-Workshop should evolve toward three layers:
+Workshop should evolve toward three practical layers:
 
 1. `core`
-2. `adapters`
+2. `runtime edges`
 3. `shells`
 
 ## 1. Core
 
-The core should contain product/domain logic that does not care whether the surface is:
+The core should contain product logic that does not care whether Workshop is running:
 
-- web
-- OpenClaw-invoked web
-- future iOS/Android app
+- in the hosted local web runtime
+- in a future device-local native runtime
+- or later in a server-assisted mode
 
 The core should own:
 
 - document metadata model
+- section parsing and section identity rules
+- recents ordering rules
+- discussion/message model
 - proposal set model
 - revision/checkpoint model
-- recents ordering rules
 - apply/dismiss/undo/restore semantics
-- section parsing and anchoring rules
-- conversation/proposal/revision state transitions
+- agent-turn input/output shapes
 
 The core should not know about:
 
 - Express
+- HTTP request/response objects
 - Vite
 - React DOM
 - React Native
-- file picker APIs
 - Node-only filesystem calls
-- HTTP request objects
+- phone file pickers
+- cloud/server persistence assumptions
 
-## 2. Adapters
+## 2. Runtime Edges
 
-Adapters translate the core's needs into concrete platform/runtime behavior.
+Runtime edges translate core needs into the concrete local environment.
 
-Initial adapters:
+Examples in the current hosted local runtime:
 
-- `filesystem-node`
-- `store-node-local`
-- `agent-runtime-codex-node`
-- `document-loader-markdown-node`
+- Node filesystem access
+- local JSON persistence
+- Codex auth/runtime invocation
+- path resolution
+- web/Tailscale handoff behavior
 
-Likely future adapters:
+Examples in a future device-local runtime:
 
-- `filesystem-native`
-- `store-native-local`
-- `document-import-native`
-- maybe `agent-runtime-remote` if mobile later talks to a local/remote agent service
+- phone file import/open behavior
+- on-device local storage
+- native credential handling
+- device-side agent/runtime wiring
 
-Adapters should own:
-
-- reading/writing real files
-- resolving paths
-- persisting local app state
-- auth credential storage
-- provider/runtime invocation
-- link/open handoff behavior
+These should stay runtime-specific until there is a concrete reason to unify them.
 
 ## 3. Shells
 
-Shells are user-facing application surfaces.
+Shells are the user-facing application surfaces.
 
-Initial shell:
+Current shell:
 
-- current web app + local server
+- web app + local TypeScript server
 
 Future shell:
 
-- Expo/React Native app
+- React Native / Expo app
 
 Shells should own:
 
@@ -124,21 +139,21 @@ Shells should own:
 - presentation
 - shell-specific input/output flows
 - UI state wiring
-- calling adapters/core use cases
 
 Shells should not redefine the product model.
 
 ## Design Principle
 
-Do not port the current app wholesale into React Native later.
+Do not over-abstract early.
 
-Instead:
+The goal is not to invent a grand framework for every future runtime.
+The goal is simply to avoid hard-coding Workshop's product rules into the current web implementation.
 
-- extract the durable Workshop product model now
-- keep web-specific and Node-specific code at the edges
-- let future shells reuse the same use cases and domain rules
+This means:
 
-This refactor exists to support the document-first agent workflow, not to distract from it.
+- move durable product rules into shared code
+- keep runtime-specific behavior at the edges
+- avoid extracting code that only makes sense for Express or only for the browser
 
 ## What To Extract First
 
@@ -147,18 +162,19 @@ Do not try to extract everything at once.
 
 ### First Extraction Targets
 
-These are the highest-leverage shared-core seams:
+These are the highest-leverage seams to share first:
 
-1. `recents ordering rules`
-2. `document metadata state`
-3. `revision/checkpoint semantics`
-4. `proposal set + proposal item types`
-5. `apply/dismiss/undo/restore rules`
-6. `section parsing / section identity rules`
+1. `shared domain types`
+2. `recents ordering and visibility rules`
+3. `section parsing / section identity rules`
 
-These are currently the most likely to be needed identically across web and native.
+These are the most likely to be needed identically across:
 
-### Keep In Adapters For Now
+- hosted local web runtime
+- future device-local native runtime
+- possible later server-assisted runtime
+
+### Keep Runtime-Specific For Now
 
 Do not prematurely abstract these:
 
@@ -166,9 +182,10 @@ Do not prematurely abstract these:
 - Codex auth process spawning
 - Vite/server startup details
 - browser-specific scroll/focus behavior
-- mobile-specific gesture/navigation concerns
+- mobile-specific gesture/navigation behavior
+- sync/collaboration transport ideas
 
-## Proposed Repo Shape
+## Minimal Repo Direction
 
 Not all folders need to appear immediately, but this is the intended direction.
 
@@ -176,41 +193,22 @@ Not all folders need to appear immediately, but this is the intended direction.
 workshop/
   docs/
   server/
-    routes/
-    adapters/
   src/
-    web/
   core/
     documents/
-    proposals/
-    revisions/
     recents/
     sections/
     conversation/
-  adapters/
-    filesystem-node/
-    store-node-local/
-    agent-runtime-codex-node/
+    proposals/
+    revisions/
 ```
 
-Possible later native repo shape:
-
-```text
-workshop-native/
-  app/
-  adapters/
-    filesystem-native/
-    store-native-local/
-  shared/
-    -> consumes Workshop core package
-```
-
-Whether native lives in the same repo or a sibling repo can be decided later.
-The immediate goal is to make that choice possible.
+The immediate point is not package architecture.
+The point is to establish a small shared layer that is not web-only.
 
 ## Practical Phase Plan
 
-## Phase 1: Extract Domain Types
+## Phase 1: Extract Shared Domain Types
 
 Goal:
 
@@ -222,6 +220,7 @@ Actions:
   - document metadata
   - recent-document summary
   - section identity
+  - comment / discussion message
   - proposal set
   - proposal item
   - revision snapshot
@@ -232,153 +231,103 @@ Result:
 - UI and server both import the same types
 - product state stops drifting by surface
 
-## Phase 2: Extract Pure Domain Helpers
+## Phase 2: Extract Pure Product Helpers
 
 Goal:
 
-- move product logic into testable pure functions
+- move reusable product logic into testable pure functions
 
 Actions:
 
 - extract helpers for:
   - deriving recents from document metadata
   - preserving active-document visibility in the drawer without reordering
-  - apply/dismiss/accept-all state transitions
-  - revision/restore state transitions
-  - section anchoring lookups
+  - parsing markdown sections
+  - resolving section identity/anchoring lookups
 
 Result:
 
-- the most fragile product rules no longer live inline in React components or route handlers
+- the most fragile cross-runtime rules no longer live inline in React components or route handlers
 
-## Phase 3: Extract Store Boundary
+## Phase 3: Thin Current Runtime Code
 
 Goal:
 
-- replace ad hoc JSON-shape handling inside `server.ts` with a real storage boundary
+- make the current hosted local web runtime a consumer of shared product logic rather than the place where those rules are invented
 
 Actions:
 
-- define an internal store interface for:
-  - list documents
-  - load document metadata
-  - save document metadata
-  - list revisions
-  - append revision
-  - load/save conversation state
-  - load/save proposal state
-
-- implement it first with the current local JSON store
+- update `server/server.ts` to consume shared section and recents logic
+- update `src/App.tsx` to consume shared types and simpler derived helpers
+- keep file IO, auth/runtime calls, and route wiring where they are for now
 
 Result:
 
-- current local storage still works
-- future SQLite/native/local-device storage becomes possible without rewriting product logic
+- the current app stays simple
+- the product model becomes less tied to web-only assumptions
 
-## Phase 4: Extract Document Service
+## Phase 4: Extract More Shared Product Semantics
 
-Goal:
+Only do this once the need is real.
 
-- separate file-backed document operations from HTTP and UI concerns
+Likely next shared candidates:
 
-Actions:
-
-- create a document service/use-case layer that handles:
-  - open-or-resume document
-  - load canonical markdown
-  - parse sections
-  - derive view model inputs
-  - create initial checkpoint when first seen
-
-Result:
-
-- web server routes become thinner
-- native shell later has a clear use-case layer to call
-
-## Phase 5: Extract Agent Turn Service
-
-Goal:
-
-- make the future agent loop shared at the product layer, not buried in route handlers
-
-Actions:
-
-- define one shared use case like:
-  - `runAgentTurn(documentContext, userTurn, focusContext)`
-
-- return:
-  - discussion messages
-  - optional proposal set
-
-- keep Codex-specific invocation in an adapter
-
-Result:
-
-- the web shell and native shell can both drive the same product turn semantics
-
-## Phase 6: Thin The Web Shell
-
-Goal:
-
-- make `src/App.tsx` a consumer of the shared product model rather than the place where product rules are invented
-
-Actions:
-
-- move inline logic out of `App.tsx`
-- keep `App.tsx` focused on:
-  - calling APIs
-  - presentation state
-  - rendering document/rail/history surfaces
-
-Result:
-
-- web stays better structured
-- native implementation later has a cleaner example to mirror
+- discussion / agent-turn shapes
+- proposal/revision types
+- apply/dismiss/undo/restore state transitions
 
 ## What We Should Not Do Yet
 
 Avoid these premature moves:
 
-1. do not create a giant abstract plugin system
+1. do not create a giant abstract adapter framework
 2. do not create a generic provider registry
 3. do not prematurely optimize for monorepo package publishing
-4. do not solve every mobile file-management detail now
-5. do not rewrite the whole app into some new framework just to feel "architectural"
+4. do not solve every native file-management detail now
+5. do not design a sync/collaboration backend before it exists
+6. do not rewrite the whole app into some new framework just to feel "architectural"
 
 This refactor should support the next real task:
 
 - getting the web agent-document loop working well
 
-## Native-App Implications
+## Native-Local Implications
 
-This refactor plan is intentionally chosen to make a future Expo/React Native app practical.
+This plan is intentionally chosen to make a future React Native / Expo app practical without assuming it talks to a Workshop server.
 
 What native should be able to reuse:
 
-- document/proposal/revision/recents domain logic
-- section parsing rules
+- document/section/recents domain logic
+- discussion/product state shapes
 - proposal and revision state transitions
 - product semantics around apply/dismiss/undo/restore
+- agent-turn input/output shapes
 
 What native will likely need its own implementation for:
 
 - file import/open flows
-- local filesystem/storage details
+- on-device local storage
 - shell navigation
 - offline/background behavior
 - native credential handling
+- local agent/runtime wiring
 
-## Recommended First Native Storage Assumption
+## Future Server-Assisted Possibility
 
-Do not assume v1 native must support arbitrary external-folder editing like a full Obsidian vault.
+There may later be value in optional services for:
 
-Safer first assumption:
+- synchronization
+- collaboration
+- backup
+- remote execution
 
-- import/open files into app-managed local storage
-- keep Workshop metadata and revisions locally
-- export/share when needed
+If that happens, those services should plug into Workshop as additional runtime edges rather than become the definition of the product model.
 
-This should remain an adapter-level choice, not a core product constraint.
+For now, the safe assumption is:
+
+- the product is local-first
+- the runtimes differ
+- the core stays shared
 
 ## Success Criteria For This Refactor
 
@@ -386,7 +335,7 @@ The refactor is succeeding when:
 
 1. the current web app remains functional
 2. product rules move out of `App.tsx` and `server.ts`
-3. recents/proposals/revisions are defined once in shared code
+3. shared code is useful to both hosted-local and device-local futures
 4. the next web agent-loop work becomes easier, not harder
 5. a future native shell is plausible without redefining Workshop's product model
 
@@ -398,7 +347,7 @@ The next concrete slice should be:
 
 1. create shared domain/type modules
 2. extract recents derivation into shared pure logic
-3. extract store access behind a small interface
-4. update web/server code to consume those seams
+3. extract section parsing into shared pure logic
+4. update current web/server code to consume those seams
 
-That is enough to establish the architectural direction without stalling product progress.
+That is enough to establish the direction without stalling product progress or overcomplicating the codebase.

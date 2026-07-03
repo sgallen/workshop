@@ -25,6 +25,26 @@ OpenClaw can:
 
 Once the user enters Workshop, Workshop owns the document-first human-agent interaction.
 
+## Local Runtime Shapes
+
+Workshop should support more than one local runtime shape over time.
+
+The important near-term distinction is:
+
+1. hosted local runtime
+   - Workshop is installed on a machine
+   - something like OpenClaw may expose or invoke it
+   - the user may reach it locally or over Tailscale
+
+2. device-local runtime
+   - Workshop is installed directly on the phone
+   - the user interacts with it locally on-device
+   - no separate Workshop server is required
+
+This note is mostly about the first shape, because that is the current handoff model.
+
+But the product contract should be kept clean enough that the second shape does not require redefining what Workshop is.
+
 ## OpenClaw -> Workshop Handoff
 
 The intended user moment is simple:

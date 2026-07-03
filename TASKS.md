@@ -47,8 +47,8 @@ Keep the shared task board for cross-project coordination and repo-level priorit
 ### Ready
 
 #### WS-0005 Refactor toward shared core and multiple shells
-- **Goal:** Separate Workshop's durable document/proposal/revision logic from the current web/Node shell so a future native shell can reuse the product core.
-- **Notes:** Follow `docs/shared-core-multi-shell-refactor-plan.md`. Keep the refactor incremental and in service of the near-term web agent loop, not as an architecture detour.
+- **Goal:** Separate Workshop's durable document/proposal/revision logic from the current hosted-local web/runtime shell so both a future device-local native shell and the current host-local flow can reuse the same product core.
+- **Notes:** Follow `docs/shared-core-multi-shell-refactor-plan.md`. Keep the refactor incremental, local-first, and in service of the near-term web agent loop rather than as an architecture detour.
 
 #### WS-0002 Implement the first concrete agent actions
 - **Goal:** Add the narrow set of section-aware or document-aware agent actions that make the v1 loop genuinely useful.
@@ -60,7 +60,7 @@ Keep the shared task board for cross-project coordination and repo-level priorit
 
 #### WS-0004 Capture minimal agent-open contract for Workshop documents
 - **Goal:** Document the smallest durable contract for how an agent opens a document in Workshop without exposing local path complexity.
-- **Notes:** This may land as a short doc/README slice once the implementation shape is proven.
+- **Notes:** This is primarily about the hosted-local handoff shape for now, but should avoid assumptions that would prevent a future device-local runtime from using the same product model.
 
 ### Blocked
 - None.

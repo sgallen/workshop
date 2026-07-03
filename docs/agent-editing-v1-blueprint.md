@@ -797,6 +797,75 @@ Practical first rendering rule:
 - if `activeProposalSet` is `null`, the app should behave almost exactly like today's experience
 - if `activeProposalSet` exists, the document pane and discussion rail should layer proposal UI on top of the existing document/comment experience rather than replacing it wholesale
 
+### Suggested First Server Helpers
+
+The first server pass should stay explicit rather than prematurely abstract.
+
+Recommended helper responsibilities inside `server/server.ts`:
+
+- `getActiveProposalSet(relativePath)`
+  - return the current active proposal set for one document, if any
+- `saveProposalSet(relativePath, proposalSet)`
+  - append or replace proposal-set state for one document
+- `listRevisions(relativePath)`
+  - return latest-first revision metadata
+- `appendRevision(relativePath, revision)`
+  - append a new canonical snapshot revision
+- `applyProposalItemToDocument(relativePath, proposalItem)`
+  - produce the new canonical markdown and persist it to disk
+- `dismissProposalItem(relativePath, proposalSetId, proposalItemId)`
+  - mark one proposal item dismissed and update set state
+
+Practical rule:
+
+- keep these helpers near the existing artifact/document persistence code first
+- split them into dedicated modules only after the proposal/revision loop is working end to end
+
+### Suggested First Server Flow
+
+For the first accepted proposal path:
+
+1. load the current canonical document
+2. load the active proposal set
+3. apply one proposal item
+4. write the new canonical markdown to disk
+5. reparse the document into the existing document payload shape
+6. append a revision snapshot
+7. update proposal-item and proposal-set status
+8. return the compact mutation response payload
+
+That order keeps the document file as the source of truth and reuses the existing document-loading path instead of creating a second canonical representation.
+
+### Suggested First Failure States
+
+The first implementation should keep failure handling simple and explicit.
+
+Recommended first failure buckets:
+
+- `agent_unavailable`
+  - auth missing, expired, disconnected, or provider runtime unavailable
+- `proposal_conflict`
+  - proposal target can no longer be applied cleanly against the current canonical document
+- `document_write_failed`
+  - file write or snapshot persistence failed
+- `invalid_request`
+  - missing path, missing proposal IDs, or unsupported mutation request
+
+Practical UI handling:
+
+- show failure text in the existing error banner and/or discussion rail status area
+- leave the canonical document unchanged on failed accept/dismiss/apply operations
+- preserve the active proposal set when a mutation fails unless the failure proves the proposal is unusable
+- force a document reload only when the server can no longer trust the current client state
+
+Practical API handling:
+
+- return a short machine-readable error code
+- return a concise user-facing error message
+- avoid partial success responses that leave proposal status ambiguous
+
+The v1 goal is not sophisticated recovery. It is predictable failure behavior that does not corrupt the document loop.
+
 ## Notes For Future Versions
 
 - Stronger models may return better proposal sets without requiring a product rewrite.

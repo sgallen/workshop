@@ -91,6 +91,32 @@ That separation matters:
 - external tools handle discovery and handoff
 - Workshop handles the actual workshopping loop
 
+## Local-First Runtime Direction
+
+Workshop should be understood as a local-first product that may run in more than one local shape over time.
+
+The two important runtime shapes are:
+
+- a hosted local runtime
+  - for example, Workshop installed on a machine and accessed locally or over Tailscale
+- a device-local runtime
+  - for example, a future native app installed directly on a phone
+
+The current implementation is the first shape:
+
+- a local web shell
+- backed by a local TypeScript server
+
+That is the current surface, not the intended permanent architectural boundary.
+
+The longer-term direction is:
+
+- a shared product core
+- multiple local runtimes/shells
+- possible later optional services for sync, collaboration, backup, or remote execution
+
+Those later services may matter, but they should not define Workshop's core product model now.
+
 ## Architecture Direction
 
 Workshop's current implementation is a local web shell backed by a TypeScript server.
