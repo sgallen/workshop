@@ -1,7 +1,13 @@
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { sortStoredRecents } from '../core/recents/sort-stored-recents.js';
-import type { Comment, RecentArtifact, RecentArtifactIdentity } from '../core/types.js';
+import type {
+  Comment,
+  ProposalSetRecord,
+  RecentArtifact,
+  RecentArtifactIdentity,
+  RevisionRecord
+} from '../core/types.js';
 
 type CommentRecord = Comment;
 type LegacyCommentRecord = Omit<CommentRecord, 'sectionId'>;
@@ -19,6 +25,8 @@ export type ArtifactEntry = {
 export type Store = {
   artifacts: Record<string, ArtifactEntry>;
   recents?: RecentArtifact[];
+  proposalSetsByDocument?: Record<string, ProposalSetRecord[]>;
+  revisionsByDocument?: Record<string, RevisionRecord[]>;
 };
 
 function sortComments(comments: CommentRecord[]): CommentRecord[] {
@@ -46,7 +54,15 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
 
     return {
       artifacts: candidate.artifacts && typeof candidate.artifacts === 'object' ? candidate.artifacts : {},
-      recents: Array.isArray(candidate.recents) ? candidate.recents : []
+      recents: Array.isArray(candidate.recents) ? candidate.recents : [],
+      proposalSetsByDocument:
+        candidate.proposalSetsByDocument && typeof candidate.proposalSetsByDocument === 'object'
+          ? candidate.proposalSetsByDocument
+          : {},
+      revisionsByDocument:
+        candidate.revisionsByDocument && typeof candidate.revisionsByDocument === 'object'
+          ? candidate.revisionsByDocument
+          : {}
     };
   }
 
@@ -154,10 +170,36 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
     return sortStoredRecents(mapped, 24);
   }
 
+  function getProposalSets(store: Store, relativePath: string): ProposalSetRecord[] {
+    if (!store.proposalSetsByDocument) {
+      store.proposalSetsByDocument = {};
+    }
+
+    if (!Array.isArray(store.proposalSetsByDocument[relativePath])) {
+      store.proposalSetsByDocument[relativePath] = [];
+    }
+
+    return store.proposalSetsByDocument[relativePath];
+  }
+
+  function getRevisions(store: Store, relativePath: string): RevisionRecord[] {
+    if (!store.revisionsByDocument) {
+      store.revisionsByDocument = {};
+    }
+
+    if (!Array.isArray(store.revisionsByDocument[relativePath])) {
+      store.revisionsByDocument[relativePath] = [];
+    }
+
+    return store.revisionsByDocument[relativePath];
+  }
+
   return {
     readStore,
     writeStore,
     getArtifactEntry,
+    getProposalSets,
+    getRevisions,
     listRecentArtifacts,
     touchRecentArtifact,
     recordRecentDiscussion

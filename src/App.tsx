@@ -1,6 +1,7 @@
 import { FormEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
+import { marked } from 'marked';
 import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
-import type { Artifact, RecentArtifact } from '../core/types';
+import type { Artifact, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
 import { formatArtifactTimestamp, formatRecentActivity } from './lib/formatting';
 import { readJsonResponse } from './lib/read-json-response';
 import {
@@ -31,6 +32,23 @@ const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
   }
 ];
 
+type ArtifactPayload = {
+  artifact?: Artifact;
+  proposalSet?: ProposalSetRecord | null;
+  revisions?: RevisionRecord[];
+  error?: string;
+};
+
+type AgentTurnPayload = ArtifactPayload & {
+  messages?: Array<{
+    id: string;
+    authorType: 'agent';
+    body: string;
+    createdAt: string;
+    focusedSectionId: string | null;
+  }>;
+};
+
 export function App() {
   const initialPath = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -51,10 +69,14 @@ export function App() {
   const [draftPath, setDraftPath] = useState(initialPath);
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [recentArtifacts, setRecentArtifacts] = useState<RecentArtifact[]>([]);
+  const [activeProposalSet, setActiveProposalSet] = useState<ProposalSetRecord | null>(null);
+  const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
+  const [appliedRevisionId, setAppliedRevisionId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [composerBody, setComposerBody] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [agentTurnPending, setAgentTurnPending] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [attachedSectionId, setAttachedSectionId] = useState<string | null>(null);
@@ -123,6 +145,17 @@ export function App() {
   const displayedRecentArtifacts = useMemo(() => {
     return buildDisplayedRecents(artifact, recentArtifacts, conversationComments.length, DEMO_RECENT_CANDIDATES);
   }, [artifact, recentArtifacts, conversationComments.length]);
+  const pendingProposalItems = useMemo(() => {
+    return activeProposalSet?.items.filter((item) => item.status === 'pending') ?? [];
+  }, [activeProposalSet]);
+  const proposalItemsBySection = useMemo(() => {
+    return new Map(
+      pendingProposalItems
+        .filter((item) => item.sectionId)
+        .map((item) => [item.sectionId as string, item])
+    );
+  }, [pendingProposalItems]);
+  const latestRevision = revisions[0] ?? null;
 
   useEffect(() => {
     void loadArtifact(artifactPath);
@@ -286,7 +319,28 @@ export function App() {
     window.requestAnimationFrame(() => {
       scrollThreadToBottom();
     });
-  }, [railOpen, conversationComments.length]);
+  }, [railOpen, conversationComments.length, agentTurnPending]);
+
+  function applyArtifactPayload(payload: ArtifactPayload | ProposalMutationResult) {
+    if (!payload.artifact) {
+      return;
+    }
+
+    const nextArtifact = payload.artifact;
+
+    setArtifact(nextArtifact);
+    setActiveProposalSet(payload.proposalSet ?? null);
+    setRevisions(payload.revisions ?? []);
+
+    setLastLoadedUpdatedAt(nextArtifact.updatedAt);
+    setHasRemoteUpdate(false);
+    setDraftPath(nextArtifact.relativePath);
+    setAttachedSectionId((current) => (current && nextArtifact.sections.some((section) => section.id === current) ? current : null));
+
+    const params = new URLSearchParams(window.location.search);
+    params.set('path', nextArtifact.relativePath);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+  }
 
   async function loadRecents() {
     try {
@@ -309,24 +363,18 @@ export function App() {
 
     try {
       const response = await fetch(`/api/artifact?path=${encodeURIComponent(nextPath)}`);
-      const payload = await readJsonResponse<{ artifact?: Artifact; error?: string }>(response);
+      const payload = await readJsonResponse<ArtifactPayload>(response);
 
       if (!response.ok || !payload.artifact) {
         throw new Error(payload.error ?? 'Failed to load document.');
       }
 
-      setArtifact(payload.artifact);
-      setLastLoadedUpdatedAt(payload.artifact.updatedAt);
-      setHasRemoteUpdate(false);
-      setDraftPath(payload.artifact.relativePath);
-      setAttachedSectionId((current) => (current && payload.artifact?.sections.some((section) => section.id === current) ? current : null));
-
-      const params = new URLSearchParams(window.location.search);
-      params.set('path', payload.artifact.relativePath);
-      window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+      applyArtifactPayload(payload);
       void loadRecents();
     } catch (caughtError) {
       setArtifact(null);
+      setActiveProposalSet(null);
+      setRevisions([]);
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load document.');
     } finally {
       setLoading(false);
@@ -407,6 +455,7 @@ export function App() {
     setDraftPath(normalizedPath);
     setMenuOpen(false);
     setRailOpen(false);
+    setAppliedRevisionId(null);
 
     if (normalizedPath === artifactPath) {
       void loadArtifact(normalizedPath);
@@ -425,33 +474,57 @@ export function App() {
     }
 
     setSubmitting(true);
+    setAgentTurnPending(agentAuth?.state === 'connected');
     setError(null);
 
     try {
-      const response = await fetch('/api/comments', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          path: resolvedArtifactPath,
-          sectionId: attachedSectionId,
-          body
-        })
-      });
-      const payload = await readJsonResponse<{ artifact?: Artifact; error?: string }>(response);
+      if (agentAuth?.state === 'connected') {
+        const response = await fetch('/api/agent/turn', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            path: resolvedArtifactPath,
+            focusedSectionId: attachedSectionId,
+            prompt: body
+          })
+        });
+        const payload = await readJsonResponse<AgentTurnPayload>(response);
 
-      if (!response.ok || !payload.artifact) {
-        throw new Error(payload.error ?? 'Failed to save comment.');
+        if (!response.ok || !payload.artifact) {
+          throw new Error(payload.error ?? 'Failed to run the agent turn.');
+        }
+
+        applyArtifactPayload(payload);
+      } else {
+        const response = await fetch('/api/comments', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            path: resolvedArtifactPath,
+            sectionId: attachedSectionId,
+            body
+          })
+        });
+        const payload = await readJsonResponse<ArtifactPayload>(response);
+
+        if (!response.ok || !payload.artifact) {
+          throw new Error(payload.error ?? 'Failed to save comment.');
+        }
+
+        applyArtifactPayload(payload);
       }
 
-      setArtifact(payload.artifact);
       setComposerBody('');
       void loadRecents();
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to save comment.');
     } finally {
       setSubmitting(false);
+      setAgentTurnPending(false);
     }
   }
 
@@ -495,6 +568,46 @@ export function App() {
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to disconnect ChatGPT/Codex.');
     }
+  }
+
+  async function handleProposalMutation(endpoint: string) {
+    setError(null);
+
+    try {
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          path: resolvedArtifactPath
+        })
+      });
+      const payload = await readJsonResponse<(ProposalMutationResult & { error?: string })>(response);
+
+      if (!response.ok || !payload.artifact) {
+        throw new Error(payload.error ?? 'Failed to update the proposal.');
+      }
+
+      applyArtifactPayload(payload);
+      setAppliedRevisionId(payload.appliedRevision?.id ?? null);
+      void loadRecents();
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to update the proposal.');
+    }
+  }
+
+  function handleDiscussProposal(sectionId: string | null) {
+    if (sectionId) {
+      attachSection(sectionId);
+    }
+
+    setMenuOpen(false);
+    setRailOpen(true);
+
+    window.setTimeout(() => {
+      composerRef.current?.focus();
+    }, 0);
   }
 
   function handleDismissPanels() {
@@ -748,6 +861,22 @@ export function App() {
                   </button>
                 </div>
               </div>
+              {activeProposalSet || latestRevision ? (
+                <div className="reader-status-banner">
+                  <div className="reader-meta-pills">
+                    {activeProposalSet ? (
+                      <span className="meta-pill meta-pill-warning">
+                        {pendingProposalItems.length} pending {pendingProposalItems.length === 1 ? 'proposal' : 'proposals'}
+                      </span>
+                    ) : null}
+                    {latestRevision ? (
+                      <span className={`meta-pill${appliedRevisionId === latestRevision.id ? '' : ' meta-pill-muted'}`}>
+                        Revision: {latestRevision.summary}
+                      </span>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
             </header>
 
             <div
@@ -756,20 +885,61 @@ export function App() {
             >
               <section className="artifact-card artifact-reader">
                 <div className="section-list">
-                  {artifact.sections.map((section) => (
-                    <article
-                      className="section-card"
-                      data-attached={attachedSectionId === section.id ? 'true' : 'false'}
-                      id={section.id}
-                      key={section.id}
-                      onClick={(event) => handleSectionHeadingClick(section.id, event)}
-                    >
-                      <div
-                        className="section-rendered"
-                        dangerouslySetInnerHTML={{ __html: section.renderedHtml }}
-                      />
-                    </article>
-                  ))}
+                  {artifact.sections.map((section) => {
+                    const proposalItem = proposalItemsBySection.get(section.id) ?? null;
+                    const proposalHtml = proposalItem ? marked.parse(proposalItem.afterMarkdown) as string : null;
+
+                    return (
+                      <article
+                        className="section-card"
+                        data-attached={attachedSectionId === section.id ? 'true' : 'false'}
+                        id={section.id}
+                        key={section.id}
+                        onClick={(event) => handleSectionHeadingClick(section.id, event)}
+                      >
+                        <div
+                          className="section-rendered"
+                          dangerouslySetInnerHTML={{ __html: section.renderedHtml }}
+                        />
+
+                        {proposalItem ? (
+                          <div className="proposal-card">
+                            <div className="proposal-card-header">
+                              <div>
+                                <p className="proposal-kicker">Proposed change</p>
+                                <p className="proposal-summary">{proposalItem.summary}</p>
+                              </div>
+                              <div className="proposal-actions proposal-actions-inline">
+                                <button
+                                  className="primary-button compact-button"
+                                  type="button"
+                                  onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/accept`)}
+                                >
+                                  Accept
+                                </button>
+                                <button
+                                  className="secondary-button compact-button"
+                                  type="button"
+                                  onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/dismiss`)}
+                                >
+                                  Dismiss
+                                </button>
+                                <button
+                                  className="text-button"
+                                  type="button"
+                                  onClick={() => handleDiscussProposal(proposalItem.sectionId)}
+                                >
+                                  Discuss
+                                </button>
+                              </div>
+                            </div>
+                            <p className="context-subtle proposal-rationale">{activeProposalSet?.rationale}</p>
+                            <div className="proposal-rendered" dangerouslySetInnerHTML={{ __html: proposalHtml ?? '' }} />
+                          </div>
+                        ) : null}
+                      </article>
+                    );
+                  })}
                 </div>
               </section>
 
@@ -806,8 +976,38 @@ export function App() {
                     </div>
                   </div>
 
+                  {activeProposalSet ? (
+                    <div className="proposal-rail-summary">
+                      <div>
+                        <p className="proposal-kicker">Active proposal</p>
+                        <p className="proposal-summary">{activeProposalSet.summary}</p>
+                        {activeProposalSet.focusedSectionId ? (
+                          <p className="context-subtle">
+                            Focused on {sectionById.get(activeProposalSet.focusedSectionId)?.headingText ?? 'selected section'}.
+                          </p>
+                        ) : null}
+                      </div>
+                      <div className="proposal-actions">
+                        <button
+                          className="primary-button compact-button"
+                          type="button"
+                          onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/accept-all`)}
+                        >
+                          Accept all
+                        </button>
+                        <button
+                          className="secondary-button compact-button"
+                          type="button"
+                          onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`)}
+                        >
+                          Dismiss all
+                        </button>
+                      </div>
+                    </div>
+                  ) : null}
+
                   <div className="discussion-thread" ref={threadRef}>
-                    {conversationComments.length > 0 ? (
+                    {conversationComments.length > 0 || agentTurnPending ? (
                       <div className="thread-list">
                         {conversationComments.map((comment) => {
                           const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
@@ -822,6 +1022,13 @@ export function App() {
                             </div>
                           );
                         })}
+                        {agentTurnPending ? (
+                          <div className="comment-row" data-author="agent">
+                            <div className="comment-thread" data-author="agent">
+                              <p>Codex is reviewing the document…</p>
+                            </div>
+                          </div>
+                        ) : null}
                         <div aria-hidden="true" ref={threadEndRef} />
                       </div>
                     ) : (
@@ -861,6 +1068,12 @@ export function App() {
                       <div className="discussion-status-inline">
                         <span className="status-pill">Updated</span>
                         <span className="context-subtle">A newer document version is available.</span>
+                      </div>
+                    ) : null}
+                    {latestRevision ? (
+                      <div className="discussion-status-inline">
+                        <span className="status-pill">Revision</span>
+                        <span className="context-subtle">{latestRevision.summary}</span>
                       </div>
                     ) : null}
                     {error ? <p className="rail-error-inline">{error}</p> : null}

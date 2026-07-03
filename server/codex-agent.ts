@@ -1,6 +1,8 @@
 import { ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { promises as fs } from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
+import type { ProposalSetRecord } from '../core/types.js';
 
 export type AgentAuthState = 'not_connected' | 'connecting' | 'connected' | 'expired' | 'error';
 
@@ -13,6 +15,33 @@ export type AgentAuthStatus = {
   code?: string | null;
   startedAt?: string;
   message?: string;
+};
+
+export type DocumentAgentTurnInput = {
+  documentPath: string;
+  markdown: string;
+  prompt: string;
+  focusedSection: {
+    id: string;
+    headingText: string;
+    markdown: string;
+  } | null;
+  sections: Array<{
+    id: string;
+    headingText: string;
+    markdown: string;
+  }>;
+  activeProposalSet: ProposalSetRecord | null;
+};
+
+type RawAgentTurnResult = {
+  messages: string[];
+  proposal: null | {
+    summary: string;
+    rationale: string;
+    targetSectionId: string;
+    afterMarkdown: string;
+  };
 };
 
 type ActiveLoginAttempt = {
@@ -88,6 +117,158 @@ function parseConnectedIdentity(stdout: string): string {
   const clean = stripAnsi(stdout);
   const match = clean.match(/Logged in using (.+)/i);
   return match?.[1]?.trim() ?? 'ChatGPT';
+}
+
+function buildDocumentTurnPrompt(input: DocumentAgentTurnInput): string {
+  const sectionSummaries = input.sections.map((section) => {
+    return [
+      `Section ID: ${section.id}`,
+      `Heading: ${section.headingText}`,
+      '<section_markdown>',
+      section.markdown,
+      '</section_markdown>'
+    ].join('\n');
+  }).join('\n\n');
+
+  const focusBlock = input.focusedSection
+    ? [
+        'Focused section:',
+        `- id: ${input.focusedSection.id}`,
+        `- heading: ${input.focusedSection.headingText}`,
+        '<focused_section_markdown>',
+        input.focusedSection.markdown,
+        '</focused_section_markdown>'
+      ].join('\n')
+    : 'Focused section: none';
+
+  const activeProposalBlock = input.activeProposalSet
+    ? [
+        'There is already one active pending proposal set.',
+        `Summary: ${input.activeProposalSet.summary}`,
+        `Focused section id: ${input.activeProposalSet.focusedSectionId ?? 'none'}`,
+        'Unless the user is clearly asking to replace that proposal, respond with discussion only and set proposal to null.'
+      ].join('\n')
+    : 'There is no active proposal set.';
+
+  return `
+You are helping a human refine a Markdown document inside Workshop.
+
+Return valid JSON matching the provided schema.
+
+Rules:
+- Always return at least one short agent discussion message in messages.
+- The full document is in context.
+- The focused section is only a hint, not a hard boundary.
+- Only create a proposal when you can honestly express it as one replace_section proposal against exactly one existing section id.
+- If the request is mainly critique, clarification, or a broader rewrite than one section, return discussion only and set proposal to null.
+- If you create a proposal, afterMarkdown must be complete Markdown for the replacement section, including the heading line.
+- If the user is focused on a section and asks for a rewrite there, prefer that section id.
+- Never invent section ids. Use one of the provided ids exactly.
+
+Document path: ${input.documentPath}
+
+${focusBlock}
+
+${activeProposalBlock}
+
+User prompt:
+${input.prompt}
+
+Available sections:
+${sectionSummaries}
+
+Full document markdown:
+<document_markdown>
+${input.markdown}
+</document_markdown>
+  `.trim();
+}
+
+async function runCodexExec(rootDir: string, prompt: string): Promise<RawAgentTurnResult> {
+  const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'workshop-agent-turn-'));
+  const schemaPath = path.join(tempDir, 'schema.json');
+  const outputPath = path.join(tempDir, 'result.json');
+
+  const schema = {
+    type: 'object',
+    properties: {
+      messages: {
+        type: 'array',
+        items: {
+          type: 'string'
+        },
+        minItems: 1
+      },
+      proposal: {
+        anyOf: [
+          { type: 'null' },
+          {
+            type: 'object',
+            properties: {
+              summary: { type: 'string' },
+              rationale: { type: 'string' },
+              targetSectionId: { type: 'string' },
+              afterMarkdown: { type: 'string' }
+            },
+            required: ['summary', 'rationale', 'targetSectionId', 'afterMarkdown'],
+            additionalProperties: false
+          }
+        ]
+      }
+    },
+    required: ['messages', 'proposal'],
+    additionalProperties: false
+  };
+
+  await fs.writeFile(schemaPath, JSON.stringify(schema, null, 2));
+
+  try {
+    const args = [
+      'exec',
+      '-C',
+      rootDir,
+      '-m',
+      'gpt-5.4-mini',
+      '-s',
+      'read-only',
+      '--skip-git-repo-check',
+      '--color',
+      'never',
+      '--output-schema',
+      schemaPath,
+      '-o',
+      outputPath,
+      prompt
+    ];
+
+    const result = await new Promise<{ code: number | null; stderr: string }>((resolve, reject) => {
+      const child = spawn('codex', args, {
+        cwd: rootDir,
+        env: createCodexEnv(rootDir),
+        stdio: ['ignore', 'ignore', 'pipe']
+      });
+
+      let stderr = '';
+
+      child.stderr.on('data', (chunk: Buffer) => {
+        stderr += String(chunk);
+      });
+
+      child.on('error', reject);
+      child.on('exit', (code) => {
+        resolve({ code, stderr });
+      });
+    });
+
+    if (result.code !== 0) {
+      throw new Error(stripAnsi(result.stderr).trim() || 'Codex did not complete the document turn.');
+    }
+
+    const raw = await fs.readFile(outputPath, 'utf8');
+    return JSON.parse(raw) as RawAgentTurnResult;
+  } finally {
+    await fs.rm(tempDir, { recursive: true, force: true });
+  }
 }
 
 let activeLoginAttempt: ActiveLoginAttempt | null = null;
@@ -275,4 +456,17 @@ export async function disconnectAgent(rootDir: string): Promise<AgentAuthStatus>
     state: AUTH_STATUS.NOT_CONNECTED,
     provider: 'openai-codex'
   };
+}
+
+export async function runDocumentAgentTurn(
+  rootDir: string,
+  input: DocumentAgentTurnInput
+): Promise<RawAgentTurnResult> {
+  const status = await getAgentAuthStatus(rootDir);
+
+  if (status.state !== AUTH_STATUS.CONNECTED) {
+    throw new Error('agent_unavailable');
+  }
+
+  return runCodexExec(rootDir, buildDocumentTurnPrompt(input));
 }

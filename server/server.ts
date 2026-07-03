@@ -1,13 +1,24 @@
 import express, { type Request, type Response } from 'express';
+import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { parseMarkdownSections } from '../core/sections/parse-markdown-sections.js';
+import type {
+  Artifact,
+  ProposalItemRecord,
+  ProposalMutationResult,
+  ProposalSetRecord,
+  ProposalSetStatus,
+  RevisionRecord
+} from '../core/types.js';
 import {
   disconnectAgent,
   getAgentAuthStatus,
+  runDocumentAgentTurn,
   startAgentConnect
 } from './codex-agent.js';
-import { createJsonFileStore, type ArtifactEntry } from './store.js';
 import { createDocumentService } from './documents.js';
+import { createJsonFileStore, type ArtifactEntry, type Store } from './store.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -30,6 +41,10 @@ const documentService = createDocumentService({
   }
 });
 
+function createId(prefix: string): string {
+  return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
 function getAppOrigin(request: Request): string {
   if (APP_ORIGIN) {
     return APP_ORIGIN.replace(/\/+$/, '');
@@ -45,6 +60,197 @@ function getAppOrigin(request: Request): string {
   }
 
   return `${proto}://${host.replace(/:\d+$/, ':4173')}`;
+}
+
+function listLatestRevisions(store: Store, relativePath: string): RevisionRecord[] {
+  return [...artifactStore.getRevisions(store, relativePath)].reverse();
+}
+
+function refreshProposalSetStatus(proposalSet: ProposalSetRecord): ProposalSetRecord {
+  const pendingCount = proposalSet.items.filter((item) => item.status === 'pending').length;
+  const appliedCount = proposalSet.items.filter((item) => item.status === 'applied').length;
+
+  let status: ProposalSetStatus;
+
+  if (pendingCount === 0 && appliedCount === 0) {
+    status = 'dismissed';
+  } else if (pendingCount === 0 && appliedCount > 0) {
+    status = 'applied';
+  } else if (appliedCount > 0) {
+    status = 'partially_applied';
+  } else {
+    status = 'pending';
+  }
+
+  proposalSet.status = status;
+  return proposalSet;
+}
+
+function getActiveProposalSet(store: Store, relativePath: string): ProposalSetRecord | null {
+  const proposalSets = artifactStore.getProposalSets(store, relativePath);
+
+  for (let index = proposalSets.length - 1; index >= 0; index -= 1) {
+    const proposalSet = refreshProposalSetStatus(proposalSets[index]);
+
+    if (proposalSet.items.some((item) => item.status === 'pending')) {
+      return proposalSet;
+    }
+  }
+
+  return null;
+}
+
+function saveProposalSet(store: Store, relativePath: string, proposalSet: ProposalSetRecord): void {
+  const proposalSets = artifactStore.getProposalSets(store, relativePath);
+  const existingIndex = proposalSets.findIndex((candidate) => candidate.id === proposalSet.id);
+
+  if (existingIndex >= 0) {
+    proposalSets[existingIndex] = proposalSet;
+    return;
+  }
+
+  const previousActiveProposal = getActiveProposalSet(store, relativePath);
+
+  if (previousActiveProposal && previousActiveProposal.id !== proposalSet.id) {
+    previousActiveProposal.items = previousActiveProposal.items.map((item) => {
+      return item.status === 'pending'
+        ? {
+            ...item,
+            status: 'dismissed'
+          }
+        : item;
+    });
+    refreshProposalSetStatus(previousActiveProposal);
+  }
+
+  proposalSets.push(proposalSet);
+}
+
+function appendRevision(store: Store, relativePath: string, revision: RevisionRecord): void {
+  artifactStore.getRevisions(store, relativePath).push(revision);
+}
+
+async function loadArtifactPayload(relativePath: string): Promise<Artifact> {
+  return documentService.loadArtifact(relativePath);
+}
+
+async function buildArtifactState(relativePath: string): Promise<{
+  artifact: Artifact;
+  proposalSet: ProposalSetRecord | null;
+  revisions: RevisionRecord[];
+}> {
+  const store = await artifactStore.readStore();
+
+  return {
+    artifact: await loadArtifactPayload(relativePath),
+    proposalSet: getActiveProposalSet(store, relativePath),
+    revisions: listLatestRevisions(store, relativePath)
+  };
+}
+
+async function buildProposalMutationResult(
+  relativePath: string,
+  appliedRevision: RevisionRecord | null
+): Promise<ProposalMutationResult> {
+  const state = await buildArtifactState(relativePath);
+
+  return {
+    artifact: state.artifact,
+    proposalSet: state.proposalSet,
+    revisions: state.revisions,
+    appliedRevision
+  };
+}
+
+async function applyReplaceSectionProposal(relativePath: string, proposalItem: ProposalItemRecord): Promise<string> {
+  if (proposalItem.kind !== 'replace_section' || !proposalItem.sectionId) {
+    throw new Error('invalid_request');
+  }
+
+  const { absolutePath } = await documentService.resolveArtifactPath(relativePath);
+  const markdown = await fs.readFile(absolutePath, 'utf8');
+  const sections = parseMarkdownSections(markdown);
+  const targetSection = sections.find((section) => section.id === proposalItem.sectionId);
+
+  if (!targetSection) {
+    throw new Error('proposal_conflict');
+  }
+
+  if (targetSection.markdown.trim() !== proposalItem.beforeMarkdown.trim()) {
+    throw new Error('proposal_conflict');
+  }
+
+  const lines = markdown.split('\n');
+  const originalLines = lines.slice(targetSection.startLine - 1, targetSection.endLine);
+  let trailingBlankCount = 0;
+
+  for (let index = originalLines.length - 1; index >= 0; index -= 1) {
+    if (originalLines[index].trim()) {
+      break;
+    }
+
+    trailingBlankCount += 1;
+  }
+
+  const replacementLines = proposalItem.afterMarkdown.trim().split('\n');
+
+  if (trailingBlankCount > 0) {
+    replacementLines.push(...Array.from({ length: trailingBlankCount }, () => ''));
+  }
+
+  lines.splice(targetSection.startLine - 1, targetSection.endLine - targetSection.startLine + 1, ...replacementLines);
+
+  const nextMarkdown = lines.join('\n');
+  await fs.writeFile(absolutePath, nextMarkdown);
+  return nextMarkdown;
+}
+
+function updateProposalItemStatus(
+  proposalSet: ProposalSetRecord,
+  proposalItemId: string,
+  status: 'applied' | 'dismissed'
+): ProposalItemRecord {
+  const proposalItem = proposalSet.items.find((item) => item.id === proposalItemId);
+
+  if (!proposalItem) {
+    throw new Error('invalid_request');
+  }
+
+  if (proposalItem.status !== 'pending') {
+    throw new Error('invalid_request');
+  }
+
+  proposalItem.status = status;
+  refreshProposalSetStatus(proposalSet);
+  return proposalItem;
+}
+
+function renderSectionTargetLabel(markdown: string, fallback: string): string {
+  const firstLine = markdown.split('\n').find((line) => line.trim());
+
+  if (!firstLine) {
+    return fallback;
+  }
+
+  const headingMatch = /^(#{1,6})\s+(.+?)\s*$/.exec(firstLine.trim());
+  return headingMatch?.[2]?.trim() || fallback;
+}
+
+function toErrorMessage(error: unknown): string {
+  if (!(error instanceof Error)) {
+    return 'Request failed.';
+  }
+
+  switch (error.message) {
+    case 'agent_unavailable':
+      return 'Connect Codex before running an agent turn.';
+    case 'proposal_conflict':
+      return 'That proposal no longer matches the current document. Refresh and try again.';
+    case 'invalid_request':
+      return 'That action is no longer available.';
+    default:
+      return error.message || 'Request failed.';
+  }
 }
 
 app.get('/api/health', (_request: Request, response: Response) => {
@@ -69,7 +275,11 @@ app.get('/api/artifact', async (request: Request, response: Response) => {
     const currentStore = await artifactStore.readStore();
     artifactStore.touchRecentArtifact(currentStore, artifact);
     await artifactStore.writeStore(currentStore);
-    response.json({ artifact });
+    response.json({
+      artifact,
+      proposalSet: getActiveProposalSet(currentStore, artifact.relativePath),
+      revisions: listLatestRevisions(currentStore, artifact.relativePath)
+    });
   } catch (error) {
     response.status(400).json({
       error: error instanceof Error ? error.message : 'Failed to load artifact.'
@@ -90,9 +300,12 @@ app.get('/api/artifact/meta', async (request: Request, response: Response) => {
 app.get('/api/comments', async (request: Request, response: Response) => {
   try {
     const artifact = await documentService.loadArtifact(String(request.query.path ?? ''));
+    const currentStore = await artifactStore.readStore();
     response.json({
       comments: artifact.comments,
-      artifact
+      artifact,
+      proposalSet: getActiveProposalSet(currentStore, artifact.relativePath),
+      revisions: listLatestRevisions(currentStore, artifact.relativePath)
     });
   } catch (error) {
     response.status(400).json({
@@ -196,11 +409,289 @@ app.post('/api/comments', async (request: Request, response: Response) => {
 
     await artifactStore.writeStore(currentStore);
 
-    const artifact = await documentService.loadArtifact(artifactPath);
-    response.json({ artifact });
+    const state = await buildArtifactState(relativePath);
+    response.json(state);
   } catch (error) {
     response.status(400).json({
       error: error instanceof Error ? error.message : 'Failed to save comment.'
+    });
+  }
+});
+
+app.post('/api/agent/turn', async (request: Request, response: Response) => {
+  const body = request.body as {
+    path?: unknown;
+    focusedSectionId?: unknown;
+    prompt?: unknown;
+  } | undefined;
+
+  if (typeof body?.path !== 'string' || typeof body?.prompt !== 'string') {
+    response.status(400).json({ error: 'Expected path and prompt.' });
+    return;
+  }
+
+  if (!(typeof body?.focusedSectionId === 'string' || typeof body?.focusedSectionId === 'undefined' || body?.focusedSectionId === null)) {
+    response.status(400).json({ error: 'focusedSectionId must be a string or null.' });
+    return;
+  }
+
+  const prompt = body.prompt.trim();
+
+  if (!prompt) {
+    response.status(400).json({ error: 'Prompt cannot be empty.' });
+    return;
+  }
+
+  try {
+    const artifact = await documentService.loadArtifact(body.path);
+    const { absolutePath } = await documentService.resolveArtifactPath(body.path);
+    const fullMarkdown = await fs.readFile(absolutePath, 'utf8');
+    const focusedSection = typeof body.focusedSectionId === 'string'
+      ? artifact.sections.find((section) => section.id === body.focusedSectionId) ?? null
+      : null;
+    const currentStore = await artifactStore.readStore();
+    const artifactEntry = artifactStore.getArtifactEntry(currentStore, artifact.relativePath);
+    const humanTurnId = createId('turn_human');
+    const humanCreatedAt = new Date().toISOString();
+
+    artifactEntry.comments.push({
+      id: humanTurnId,
+      authorType: 'human',
+      body: prompt,
+      createdAt: humanCreatedAt,
+      sectionId: focusedSection?.id ?? null
+    });
+
+    const turnResult = await runDocumentAgentTurn(ROOT_DIR, {
+      documentPath: artifact.relativePath,
+      markdown: fullMarkdown,
+      prompt,
+      focusedSection: focusedSection
+        ? {
+            id: focusedSection.id,
+            headingText: focusedSection.headingText,
+            markdown: focusedSection.markdown
+          }
+        : null,
+      sections: artifact.sections.map((section) => ({
+        id: section.id,
+        headingText: section.headingText,
+        markdown: section.markdown
+      })),
+      activeProposalSet: getActiveProposalSet(currentStore, artifact.relativePath)
+    });
+
+    const agentCreatedAt = new Date().toISOString();
+    const messages = turnResult.messages.map((messageBody) => ({
+      id: createId('turn_agent'),
+      authorType: 'agent' as const,
+      body: messageBody.trim(),
+      createdAt: agentCreatedAt,
+      focusedSectionId: focusedSection?.id ?? null
+    })).filter((message) => message.body);
+
+    for (const message of messages) {
+      artifactEntry.comments.push({
+        id: message.id,
+        authorType: 'agent',
+        body: message.body,
+        createdAt: message.createdAt,
+        sectionId: message.focusedSectionId
+      });
+    }
+
+    let proposalSet: ProposalSetRecord | null = null;
+
+    if (turnResult.proposal) {
+      const targetSection = artifact.sections.find((section) => section.id === turnResult.proposal?.targetSectionId);
+      const afterMarkdown = turnResult.proposal.afterMarkdown.trim();
+
+      if (targetSection && afterMarkdown) {
+        const proposalSetId = createId('ps');
+        proposalSet = {
+          id: proposalSetId,
+          documentId: artifact.relativePath,
+          conversationTurnId: humanTurnId,
+          status: 'pending',
+          summary: turnResult.proposal.summary.trim() || `Update ${targetSection.headingText}`,
+          rationale: turnResult.proposal.rationale.trim(),
+          scope: 'section',
+          focusedSectionId: focusedSection?.id ?? null,
+          createdAt: agentCreatedAt,
+          items: [
+            {
+              id: createId('pi'),
+              proposalSetId,
+              kind: 'replace_section',
+              status: 'pending',
+              sectionId: targetSection.id,
+              targetLabel: renderSectionTargetLabel(targetSection.markdown, targetSection.headingText),
+              beforeMarkdown: targetSection.markdown,
+              afterMarkdown,
+              summary: turnResult.proposal.summary.trim() || `Update ${targetSection.headingText}`,
+              createdAt: agentCreatedAt
+            }
+          ]
+        };
+
+        saveProposalSet(currentStore, artifact.relativePath, proposalSet);
+      }
+    }
+
+    artifactStore.recordRecentDiscussion(currentStore, {
+      title: artifact.title,
+      relativePath: artifact.relativePath,
+      updatedAt: artifact.updatedAt
+    }, agentCreatedAt);
+
+    await artifactStore.writeStore(currentStore);
+
+    const nextState = await buildArtifactState(artifact.relativePath);
+    response.json({
+      messages,
+      proposalSet: nextState.proposalSet,
+      artifact: nextState.artifact,
+      revisions: nextState.revisions
+    });
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
+app.post('/api/proposals/:proposalSetId/items/:proposalItemId/accept', async (request: Request, response: Response) => {
+  try {
+    const artifactPath = String(request.body?.path ?? '');
+    const { relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const currentStore = await artifactStore.readStore();
+    const proposalSet = getActiveProposalSet(currentStore, relativePath);
+
+    if (!proposalSet || proposalSet.id !== request.params.proposalSetId) {
+      throw new Error('invalid_request');
+    }
+
+    const proposalItem = proposalSet.items.find((item) => item.id === request.params.proposalItemId);
+
+    if (!proposalItem) {
+      throw new Error('invalid_request');
+    }
+
+    const markdown = await applyReplaceSectionProposal(relativePath, proposalItem);
+    updateProposalItemStatus(proposalSet, proposalItem.id, 'applied');
+
+    const revision: RevisionRecord = {
+      id: createId('rev'),
+      documentId: relativePath,
+      createdAt: new Date().toISOString(),
+      summary: proposalItem.summary,
+      source: 'proposal_item_accept',
+      proposalSetId: proposalSet.id,
+      markdown
+    };
+
+    appendRevision(currentStore, relativePath, revision);
+    await artifactStore.writeStore(currentStore);
+
+    response.json(await buildProposalMutationResult(relativePath, revision));
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
+app.post('/api/proposals/:proposalSetId/items/:proposalItemId/dismiss', async (request: Request, response: Response) => {
+  try {
+    const artifactPath = String(request.body?.path ?? '');
+    const { relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const currentStore = await artifactStore.readStore();
+    const proposalSet = getActiveProposalSet(currentStore, relativePath);
+
+    if (!proposalSet || proposalSet.id !== request.params.proposalSetId) {
+      throw new Error('invalid_request');
+    }
+
+    updateProposalItemStatus(proposalSet, String(request.params.proposalItemId), 'dismissed');
+    await artifactStore.writeStore(currentStore);
+
+    response.json(await buildProposalMutationResult(relativePath, null));
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
+app.post('/api/proposals/:proposalSetId/accept-all', async (request: Request, response: Response) => {
+  try {
+    const artifactPath = String(request.body?.path ?? '');
+    const { relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const currentStore = await artifactStore.readStore();
+    const proposalSet = getActiveProposalSet(currentStore, relativePath);
+
+    if (!proposalSet || proposalSet.id !== request.params.proposalSetId) {
+      throw new Error('invalid_request');
+    }
+
+    const pendingItems = proposalSet.items.filter((item) => item.status === 'pending');
+
+    if (pendingItems.length === 0) {
+      throw new Error('invalid_request');
+    }
+
+    let latestMarkdown = '';
+
+    for (const proposalItem of pendingItems) {
+      latestMarkdown = await applyReplaceSectionProposal(relativePath, proposalItem);
+      updateProposalItemStatus(proposalSet, proposalItem.id, 'applied');
+    }
+
+    const revision: RevisionRecord = {
+      id: createId('rev'),
+      documentId: relativePath,
+      createdAt: new Date().toISOString(),
+      summary: proposalSet.summary,
+      source: 'proposal_set_accept_all',
+      proposalSetId: proposalSet.id,
+      markdown: latestMarkdown
+    };
+
+    appendRevision(currentStore, relativePath, revision);
+    await artifactStore.writeStore(currentStore);
+
+    response.json(await buildProposalMutationResult(relativePath, revision));
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
+app.post('/api/proposals/:proposalSetId/dismiss', async (request: Request, response: Response) => {
+  try {
+    const artifactPath = String(request.body?.path ?? '');
+    const { relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const currentStore = await artifactStore.readStore();
+    const proposalSet = getActiveProposalSet(currentStore, relativePath);
+
+    if (!proposalSet || proposalSet.id !== request.params.proposalSetId) {
+      throw new Error('invalid_request');
+    }
+
+    for (const proposalItem of proposalSet.items) {
+      if (proposalItem.status === 'pending') {
+        proposalItem.status = 'dismissed';
+      }
+    }
+
+    refreshProposalSetStatus(proposalSet);
+    await artifactStore.writeStore(currentStore);
+
+    response.json(await buildProposalMutationResult(relativePath, null));
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
     });
   }
 });

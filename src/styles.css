@@ -348,6 +348,65 @@ textarea.path-input {
   margin-top: 0;
 }
 
+.proposal-card,
+.proposal-rail-summary {
+  border: 1px solid rgba(62, 90, 138, 0.2);
+  border-radius: 14px;
+  background: rgba(243, 247, 253, 0.92);
+  box-shadow: 0 10px 24px rgba(62, 90, 138, 0.08);
+  padding: 14px;
+}
+
+.proposal-card {
+  margin-top: 14px;
+}
+
+.proposal-card-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.proposal-kicker {
+  margin: 0 0 4px;
+  color: var(--accent-strong);
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.proposal-summary {
+  margin: 0;
+  color: #182535;
+  font-size: 1rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.proposal-rationale {
+  margin: 8px 0 0;
+}
+
+.proposal-rendered {
+  margin-top: 14px;
+  border-top: 1px solid rgba(62, 90, 138, 0.16);
+  padding-top: 14px;
+}
+
+.proposal-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.proposal-actions-inline {
+  justify-content: flex-end;
+}
+
 .section-rendered h1,
 .section-rendered h2,
 .section-rendered h3,
@@ -745,6 +804,10 @@ textarea.path-input {
   -webkit-overflow-scrolling: touch;
   scroll-padding-bottom: 18px;
   padding: 10px 14px 12px;
+}
+
+.proposal-rail-summary {
+  margin: 0 14px;
 }
 
 .thread-list {
