@@ -866,6 +866,51 @@ Practical API handling:
 
 The v1 goal is not sophisticated recovery. It is predictable failure behavior that does not corrupt the document loop.
 
+### Suggested First Verification Matrix
+
+The first implementation should ship with a small, explicit verification target rather than broad test ambitions.
+
+Minimum useful checks:
+
+1. agent turn without proposal
+   - returns discussion messages
+   - leaves canonical document unchanged
+   - leaves `activeProposalSet` empty
+
+2. agent turn with one `replace_section` proposal
+   - returns one active proposal set
+   - renders one inline proposal at the targeted section
+   - leaves canonical document unchanged before accept
+
+3. accept one proposal item
+   - updates canonical markdown on disk
+   - reparses the document payload
+   - records one new revision
+   - clears or updates proposal state correctly
+
+4. dismiss one proposal item
+   - leaves canonical markdown unchanged
+   - removes or updates proposal state correctly
+   - does not create a revision
+
+5. undo last accepted revision
+   - restores the previous canonical snapshot
+   - records a new latest revision entry
+   - leaves history append-only from the product point of view
+
+6. failure on stale/conflicting proposal
+   - returns `proposal_conflict`
+   - leaves canonical document unchanged
+   - does not create a revision
+
+Recommended test split:
+
+- server-focused tests for proposal apply/dismiss/revision behavior
+- one lightweight UI flow test for inline proposal rendering and accept/dismiss controls
+- manual smoke check on phone-sized layout before calling the slice done
+
+This is enough to keep the first proposal/revision implementation honest without turning the initial slice into a testing detour.
+
 ## Notes For Future Versions
 
 - Stronger models may return better proposal sets without requiring a product rewrite.

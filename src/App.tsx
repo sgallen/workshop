@@ -1,53 +1,15 @@
 import { FormEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
-
-type Comment = {
-  id: string;
-  authorType: 'human' | 'agent';
-  body: string;
-  createdAt: string;
-  sectionId?: string | null;
-};
-
-type Section = {
-  id: string;
-  headingText: string;
-  level: number;
-  startLine: number;
-  endLine: number;
-  renderedHtml: string;
-  comments: Comment[];
-};
-
-type Artifact = {
-  title: string;
-  relativePath: string;
-  absolutePath: string;
-  updatedAt: string;
-  sections: Section[];
-  comments: Comment[];
-};
-
-type RecentArtifact = {
-  title: string;
-  relativePath: string;
-  updatedAt: string | null;
-  lastOpenedAt: string | null;
-  lastDiscussedAt?: string | null;
-  commentCount: number;
-};
-
-type AgentAuthState = 'not_connected' | 'connecting' | 'connected' | 'expired' | 'error';
-
-type AgentAuthStatus = {
-  state: AgentAuthState;
-  provider: 'openai-codex';
-  authMode?: string;
-  accountLabel?: string;
-  authUrl?: string;
-  code?: string | null;
-  startedAt?: string;
-  message?: string;
-};
+import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
+import type { Artifact, RecentArtifact } from '../core/types';
+import { formatArtifactTimestamp, formatRecentActivity } from './lib/formatting';
+import { readJsonResponse } from './lib/read-json-response';
+import {
+  renderDrawerAgentActionLabel,
+  renderDrawerAgentStatusLabel,
+  renderRailAgentHint,
+  summarizeAgentStatus,
+  type AgentAuthStatus
+} from './web/agent-auth';
 
 const DEFAULT_ARTIFACT_PATH = 'docs/project-brief.md';
 const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
@@ -68,114 +30,6 @@ const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
     commentCount: 0
   }
 ];
-
-async function readJsonResponse<T>(response: Response): Promise<T> {
-  const raw = await response.text();
-
-  try {
-    return JSON.parse(raw) as T;
-  } catch {
-    throw new Error(`Unexpected ${response.headers.get('content-type') ?? 'response'} from server.`);
-  }
-}
-
-function formatRecentDate(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric'
-  }).format(new Date(value));
-}
-
-function formatArtifactTimestamp(value: string) {
-  return new Intl.DateTimeFormat(undefined, {
-    month: 'short',
-    day: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit'
-  }).format(new Date(value));
-}
-
-function formatRecentActivity(recent: RecentArtifact) {
-  if (recent.lastDiscussedAt) {
-    return `Discussed ${formatRecentDate(recent.lastDiscussedAt)}`;
-  }
-
-  if (recent.lastOpenedAt) {
-    return `Opened ${formatRecentDate(recent.lastOpenedAt)}`;
-  }
-
-  return 'Recent document';
-}
-
-function buildDisplayedRecents(
-  artifact: Artifact | null,
-  recentArtifacts: RecentArtifact[],
-  activeCommentCount: number
-): RecentArtifact[] {
-  if (!artifact) {
-    if (recentArtifacts.length >= 3) {
-      return recentArtifacts;
-    }
-
-    const seen = new Set(recentArtifacts.map((recent) => recent.relativePath));
-    const seeded = [...recentArtifacts];
-
-    for (const candidate of DEMO_RECENT_CANDIDATES) {
-      if (seen.has(candidate.relativePath)) {
-        continue;
-      }
-
-      seeded.push(candidate);
-      seen.add(candidate.relativePath);
-
-      if (seeded.length >= 3) {
-        break;
-      }
-    }
-
-    return seeded;
-  }
-
-  // The active document must remain present in the drawer so it can highlight,
-  // but merely opening an existing document must not reorder the stored recents list.
-  const seeded = [...recentArtifacts];
-  const activeIndex = seeded.findIndex((recent) => recent.relativePath === artifact.relativePath);
-
-  if (activeIndex === -1) {
-    seeded.unshift({
-      title: artifact.title,
-      relativePath: artifact.relativePath,
-      updatedAt: artifact.updatedAt,
-      lastOpenedAt: artifact.updatedAt,
-      lastDiscussedAt: null,
-      commentCount: activeCommentCount
-    });
-  } else {
-    seeded[activeIndex] = {
-      ...seeded[activeIndex],
-      title: artifact.title,
-      updatedAt: artifact.updatedAt,
-      commentCount: activeCommentCount
-    };
-  }
-
-  const seen = new Set(seeded.map((recent) => recent.relativePath));
-
-  for (const candidate of DEMO_RECENT_CANDIDATES) {
-    if (seen.has(candidate.relativePath) || candidate.relativePath === artifact.relativePath) {
-      continue;
-    }
-
-    seeded.push(candidate);
-    seen.add(candidate.relativePath);
-
-    if (seeded.length >= 3) {
-      break;
-    }
-  }
-
-  return seeded;
-}
 
 export function App() {
   const initialPath = useMemo(() => {
@@ -267,7 +121,7 @@ export function App() {
   const interactiveOverlay = menuOpen;
   const showComposerUtilityRow = Boolean(attachedSection || hasRemoteUpdate);
   const displayedRecentArtifacts = useMemo(() => {
-    return buildDisplayedRecents(artifact, recentArtifacts, conversationComments.length);
+    return buildDisplayedRecents(artifact, recentArtifacts, conversationComments.length, DEMO_RECENT_CANDIDATES);
   }, [artifact, recentArtifacts, conversationComments.length]);
 
   useEffect(() => {
@@ -682,68 +536,6 @@ export function App() {
     setRailOpen(false);
   }
 
-  function renderAgentStatusSummary() {
-    if (agentAuthLoading || !agentAuth) {
-      return 'Checking agent…';
-    }
-
-    switch (agentAuth.state) {
-      case 'connected':
-        return 'ChatGPT/Codex connected';
-      case 'connecting':
-        return agentAuth.code ? `Enter code ${agentAuth.code}` : 'Finish connecting ChatGPT/Codex';
-      case 'expired':
-        return 'ChatGPT/Codex needs reconnect';
-      case 'error':
-        return 'ChatGPT/Codex connection error';
-      default:
-        return 'ChatGPT/Codex not connected';
-    }
-  }
-
-  function renderRailAgentHint() {
-    if (agentAuthLoading || !agentAuth) {
-      return 'Not connected';
-    }
-
-    return agentAuth.state === 'connected' ? 'Connected' : 'Not connected';
-  }
-
-  function renderDrawerAgentStatusLabel() {
-    if (agentAuthLoading || !agentAuth) {
-      return 'Checking';
-    }
-
-    switch (agentAuth.state) {
-      case 'connected':
-        return 'Connected';
-      case 'connecting':
-        return 'Connecting';
-      case 'expired':
-        return 'Reconnect';
-      case 'error':
-        return 'Error';
-      default:
-        return 'Not connected';
-    }
-  }
-
-  function renderDrawerAgentActionLabel() {
-    if (agentAuthLoading) {
-      return 'Checking…';
-    }
-
-    if (agentAuth?.state === 'connected') {
-      return 'Disconnect';
-    }
-
-    if (agentAuth?.state === 'expired') {
-      return 'Reconnect';
-    }
-
-    return 'Connect';
-  }
-
   const showAgentConnectCard =
     agentAuthLoading ||
     !agentAuth ||
@@ -786,7 +578,7 @@ export function App() {
                     <span
                       className={`discussion-rail-status${agentAuth?.state === 'connecting' ? ' discussion-rail-status-disconnected' : ''}`}
                     >
-                      {renderDrawerAgentStatusLabel()}
+                      {renderDrawerAgentStatusLabel(agentAuth, agentAuthLoading)}
                     </span>
                     <span className="agent-row-provider">Codex</span>
                   </div>
@@ -797,7 +589,7 @@ export function App() {
                       onClick={() => void handleConnectAgent()}
                       disabled={agentAuthLoading}
                     >
-                      {renderDrawerAgentActionLabel()}
+                      {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
                     </button>
                   ) : null}
                 </div>
@@ -822,7 +614,7 @@ export function App() {
               <div className="agent-row agent-row-compact">
                 <div className="agent-row-main">
                   <span className="discussion-rail-status discussion-rail-status-connected">
-                    {renderDrawerAgentStatusLabel()}
+                    {renderDrawerAgentStatusLabel(agentAuth, agentAuthLoading)}
                   </span>
                   <span className="agent-row-provider">{agentAuth?.accountLabel ?? 'Codex'}</span>
                 </div>
@@ -831,7 +623,7 @@ export function App() {
                   type="button"
                   onClick={() => void handleDisconnectAgent()}
                 >
-                  {renderDrawerAgentActionLabel()}
+                  {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
                 </button>
               </div>
             )}
@@ -890,7 +682,7 @@ export function App() {
               <p className="toolbar-title">Open document</p>
               <p className="toolbar-meta">A quieter, phone-first review surface for one document and one running discussion.</p>
               <div className="reader-meta-pills toolbar-meta-pills">
-                <span className="meta-pill">{renderAgentStatusSummary()}</span>
+                <span className="meta-pill">{summarizeAgentStatus(agentAuth, agentAuthLoading)}</span>
               </div>
             </div>
             <form
@@ -992,7 +784,7 @@ export function App() {
                     <span
                       className={`discussion-rail-status${agentAuth?.state === 'connected' ? ' discussion-rail-status-connected' : ' discussion-rail-status-disconnected'}`}
                     >
-                      {renderRailAgentHint()}
+                      {renderRailAgentHint(agentAuth, agentAuthLoading)}
                     </span>
                     <div className="discussion-header-actions">
                       <button
