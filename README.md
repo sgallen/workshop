@@ -91,6 +91,43 @@ That separation matters:
 - external tools handle discovery and handoff
 - Workshop handles the actual workshopping loop
 
+## Local Runtime
+
+Workshop now has two distinct runtime pieces:
+
+- the frontend bundle built by Vite from the TypeScript/TSX client in `src/`
+- the local Express API/server implemented in TypeScript in `server/server.ts`
+
+The intended server entrypoint is the TypeScript server, not a legacy JavaScript file.
+
+Useful commands:
+
+```bash
+npm run dev
+```
+
+Runs the TypeScript server plus the Vite dev server together for local development.
+
+```bash
+npm run build
+```
+
+Builds the frontend bundle from the current TypeScript client code.
+
+```bash
+npm run server
+```
+
+Runs the current TypeScript backend via `tsx server/server.ts`.
+
+```bash
+npm run preview
+```
+
+Serves the built frontend bundle only. This is useful for checking the static UI, but by itself it is not a complete Workshop instance and does not replace the TypeScript API server.
+
+If auth or agent actions appear missing, check that the running backend is `server/server.ts` rather than a stale older process.
+
 ## The Test
 
 Workshop is succeeding if a human can move from chat into a document, steer an agent in context, and get to a stronger draft faster than they could in chat alone.

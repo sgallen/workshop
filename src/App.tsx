@@ -36,6 +36,19 @@ type RecentArtifact = {
   commentCount: number;
 };
 
+type AgentAuthState = 'not_connected' | 'connecting' | 'connected' | 'expired' | 'error';
+
+type AgentAuthStatus = {
+  state: AgentAuthState;
+  provider: 'openai-codex';
+  authMode?: string;
+  accountLabel?: string;
+  authUrl?: string;
+  code?: string | null;
+  startedAt?: string;
+  message?: string;
+};
+
 const DEFAULT_ARTIFACT_PATH = 'docs/project-brief.md';
 const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
   {
@@ -91,7 +104,7 @@ function formatRecentActivity(recent: RecentArtifact) {
     return `Opened ${formatRecentDate(recent.lastOpenedAt)}`;
   }
 
-  return 'Recent artifact';
+  return 'Recent document';
 }
 
 export function App() {
@@ -124,6 +137,8 @@ export function App() {
   const [manuallyRefreshing, setManuallyRefreshing] = useState(false);
   const [hasRemoteUpdate, setHasRemoteUpdate] = useState(false);
   const [lastLoadedUpdatedAt, setLastLoadedUpdatedAt] = useState<string | null>(null);
+  const [agentAuth, setAgentAuth] = useState<AgentAuthStatus | null>(null);
+  const [agentAuthLoading, setAgentAuthLoading] = useState(true);
 
   function scrollThreadToBottom() {
     const thread = threadRef.current;
@@ -244,6 +259,24 @@ export function App() {
   useEffect(() => {
     void loadRecents();
   }, []);
+
+  useEffect(() => {
+    void loadAgentAuthStatus();
+  }, []);
+
+  useEffect(() => {
+    if (agentAuth?.state !== 'connecting') {
+      return;
+    }
+
+    const intervalId = window.setInterval(() => {
+      void loadAgentAuthStatus(false);
+    }, 2500);
+
+    return () => {
+      window.clearInterval(intervalId);
+    };
+  }, [agentAuth?.state]);
 
   useEffect(() => {
     const composer = composerRef.current;
@@ -407,7 +440,7 @@ export function App() {
       const payload = await readJsonResponse<{ artifact?: Artifact; error?: string }>(response);
 
       if (!response.ok || !payload.artifact) {
-        throw new Error(payload.error ?? 'Failed to load artifact.');
+        throw new Error(payload.error ?? 'Failed to load document.');
       }
 
       setArtifact(payload.artifact);
@@ -422,9 +455,36 @@ export function App() {
       void loadRecents();
     } catch (caughtError) {
       setArtifact(null);
-      setError(caughtError instanceof Error ? caughtError.message : 'Failed to load artifact.');
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to load document.');
     } finally {
       setLoading(false);
+    }
+  }
+
+  async function loadAgentAuthStatus(showLoading = true) {
+    if (showLoading) {
+      setAgentAuthLoading(true);
+    }
+
+    try {
+      const response = await fetch('/api/agent/auth-status');
+      const payload = await readJsonResponse<{ auth?: AgentAuthStatus; error?: string }>(response);
+
+      if (!response.ok || !payload.auth) {
+        throw new Error(payload.error ?? 'Failed to load agent auth status.');
+      }
+
+      setAgentAuth(payload.auth);
+    } catch (caughtError) {
+      setAgentAuth({
+        state: 'error',
+        provider: 'openai-codex',
+        message: caughtError instanceof Error ? caughtError.message : 'Failed to load agent auth status.'
+      });
+    } finally {
+      if (showLoading) {
+        setAgentAuthLoading(false);
+      }
     }
   }
 
@@ -442,7 +502,7 @@ export function App() {
       const payload = await readJsonResponse<{ updatedAt?: string; error?: string }>(response);
 
       if (!response.ok || !payload.updatedAt) {
-        throw new Error(payload.error ?? 'Failed to inspect artifact.');
+        throw new Error(payload.error ?? 'Failed to inspect document.');
       }
 
       setHasRemoteUpdate(payload.updatedAt !== lastLoadedUpdatedAt);
@@ -527,6 +587,44 @@ export function App() {
     await loadArtifact(resolvedArtifactPath);
   }
 
+  async function handleConnectAgent() {
+    setError(null);
+
+    try {
+      const response = await fetch('/api/agent/connect', {
+        method: 'POST'
+      });
+      const payload = await readJsonResponse<{ auth?: AgentAuthStatus; error?: string }>(response);
+
+      if (!response.ok || !payload.auth) {
+        throw new Error(payload.error ?? 'Failed to start ChatGPT/Codex login.');
+      }
+
+      setAgentAuth(payload.auth);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to start ChatGPT/Codex login.');
+    }
+  }
+
+  async function handleDisconnectAgent() {
+    setError(null);
+
+    try {
+      const response = await fetch('/api/agent/disconnect', {
+        method: 'POST'
+      });
+      const payload = await readJsonResponse<{ auth?: AgentAuthStatus; error?: string }>(response);
+
+      if (!response.ok || !payload.auth) {
+        throw new Error(payload.error ?? 'Failed to disconnect ChatGPT/Codex.');
+      }
+
+      setAgentAuth(payload.auth);
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to disconnect ChatGPT/Codex.');
+    }
+  }
+
   function handleDismissPanels() {
     setMenuOpen(false);
     setRailOpen(false);
@@ -566,6 +664,76 @@ export function App() {
     setRailOpen(false);
   }
 
+  function renderAgentStatusSummary() {
+    if (agentAuthLoading || !agentAuth) {
+      return 'Checking agent…';
+    }
+
+    switch (agentAuth.state) {
+      case 'connected':
+        return 'ChatGPT/Codex connected';
+      case 'connecting':
+        return agentAuth.code ? `Enter code ${agentAuth.code}` : 'Finish connecting ChatGPT/Codex';
+      case 'expired':
+        return 'ChatGPT/Codex needs reconnect';
+      case 'error':
+        return 'ChatGPT/Codex connection error';
+      default:
+        return 'ChatGPT/Codex not connected';
+    }
+  }
+
+  function renderRailAgentHint() {
+    if (agentAuthLoading || !agentAuth) {
+      return 'Not connected';
+    }
+
+    return agentAuth.state === 'connected' ? 'Connected' : 'Not connected';
+  }
+
+  function renderDrawerAgentStatusLabel() {
+    if (agentAuthLoading || !agentAuth) {
+      return 'Checking';
+    }
+
+    switch (agentAuth.state) {
+      case 'connected':
+        return 'Connected';
+      case 'connecting':
+        return 'Connecting';
+      case 'expired':
+        return 'Reconnect';
+      case 'error':
+        return 'Error';
+      default:
+        return 'Not connected';
+    }
+  }
+
+  function renderDrawerAgentActionLabel() {
+    if (agentAuthLoading) {
+      return 'Checking…';
+    }
+
+    if (agentAuth?.state === 'connected') {
+      return 'Disconnect';
+    }
+
+    if (agentAuth?.state === 'expired') {
+      return 'Reconnect';
+    }
+
+    return 'Connect';
+  }
+
+  const showAgentConnectCard =
+    agentAuthLoading ||
+    !agentAuth ||
+    agentAuth.state === 'connecting' ||
+    agentAuth.state === 'expired' ||
+    agentAuth.state === 'error' ||
+    agentAuth.state === 'not_connected';
+
   return (
     <main className={`app-shell${menuOpen ? ' app-shell-menu-open' : ''}`}>
       <div
@@ -586,6 +754,69 @@ export function App() {
             <button className="workspace-menu-close" type="button" onClick={() => setMenuOpen(false)} aria-label="Close menu">
               ×
             </button>
+          </div>
+
+          <div className="workspace-menu-section workspace-menu-agent">
+            <div className="workspace-menu-section-header">
+              <p className="section-label workspace-menu-label">Agent</p>
+            </div>
+
+            {showAgentConnectCard ? (
+              <div className="agent-status-card workspace-menu-agent-card">
+                <div className="agent-row agent-row-expanded">
+                  <div className="agent-row-main">
+                    <span
+                      className={`discussion-rail-status${agentAuth?.state === 'connecting' ? ' discussion-rail-status-disconnected' : ''}`}
+                    >
+                      {renderDrawerAgentStatusLabel()}
+                    </span>
+                    <span className="agent-row-provider">Codex</span>
+                  </div>
+                  {agentAuth?.state !== 'connecting' ? (
+                    <button
+                      className="secondary-button compact-button discussion-header-button"
+                      type="button"
+                      onClick={() => void handleConnectAgent()}
+                      disabled={agentAuthLoading}
+                    >
+                      {renderDrawerAgentActionLabel()}
+                    </button>
+                  ) : null}
+                </div>
+
+                {agentAuth?.state === 'connecting' ? (
+                  <div className="agent-connect-flow">
+                    <p className="agent-connect-copy">
+                      Open{' '}
+                      <a href={agentAuth.authUrl} target="_blank" rel="noreferrer">
+                        {agentAuth.authUrl ?? 'the device login page'}
+                      </a>{' '}
+                      and enter:
+                    </p>
+                    <p className="agent-device-code">{agentAuth.code ?? 'Waiting for code…'}</p>
+                    <p className="context-subtle">Workshop will notice once the login finishes.</p>
+                  </div>
+                ) : agentAuth?.message && !agentAuthLoading ? (
+                  <p className="agent-connect-copy context-subtle">{agentAuth.message}</p>
+                ) : null}
+              </div>
+            ) : (
+              <div className="agent-row agent-row-compact">
+                <div className="agent-row-main">
+                  <span className="discussion-rail-status discussion-rail-status-connected">
+                    {renderDrawerAgentStatusLabel()}
+                  </span>
+                  <span className="agent-row-provider">{agentAuth?.accountLabel ?? 'Codex'}</span>
+                </div>
+                <button
+                  className="secondary-button compact-button discussion-header-button"
+                  type="button"
+                  onClick={() => void handleDisconnectAgent()}
+                >
+                  {renderDrawerAgentActionLabel()}
+                </button>
+              </div>
+            )}
           </div>
 
           <div className="workspace-menu-section workspace-menu-recents">
@@ -628,7 +859,7 @@ export function App() {
 
       <div className="app-frame">
         {!artifact ? (
-          <section className="app-toolbar" aria-label="Artifact controls">
+          <section className="app-toolbar" aria-label="Document controls">
             <div className="toolbar-header-row">
               <button className="secondary-button compact-button icon-button menu-trigger" type="button" onClick={() => setMenuOpen(true)} aria-label="Open menu">
                 <span className="menu-trigger-bars" aria-hidden="true">
@@ -638,8 +869,11 @@ export function App() {
               </button>
             </div>
             <div className="toolbar-copy">
-              <p className="toolbar-title">Open artifact</p>
+              <p className="toolbar-title">Open document</p>
               <p className="toolbar-meta">A quieter, phone-first review surface for one document and one running discussion.</p>
+              <div className="reader-meta-pills toolbar-meta-pills">
+                <span className="meta-pill">{renderAgentStatusSummary()}</span>
+              </div>
             </div>
             <form
               className="path-form"
@@ -668,8 +902,8 @@ export function App() {
 
         {loading ? (
           <section className="artifact-card">
-            <p className="artifact-kicker">Loading artifact</p>
-            <h2>Fetching Markdown and discussion...</h2>
+            <p className="artifact-kicker">Loading document</p>
+            <h2>Fetching the latest document and discussion...</h2>
           </section>
         ) : null}
 
@@ -692,29 +926,18 @@ export function App() {
                   </div>
                 </div>
                 <div className="reader-actions">
-                  {hasRemoteUpdate ? (
-                    <button className="secondary-button compact-button" type="button" onClick={() => void handleReloadDocument()}>
-                      Reload document
-                    </button>
-                  ) : null}
                   <button
                     className="secondary-button compact-button reader-rail-button"
                     type="button"
                     onClick={() => {
                       setMenuOpen(false);
-                      setRailOpen((current) => !current);
+                      setRailOpen(true);
                     }}
                   >
-                    {railOpen ? 'Close' : 'Discuss'}
+                    Discuss
                   </button>
                 </div>
               </div>
-              {hasRemoteUpdate ? (
-                <div className="reader-status-banner">
-                  <span className="status-pill">Document updated</span>
-                  <span className="context-subtle">Reload when you want the latest file state.</span>
-                </div>
-              ) : null}
             </header>
 
             <div
@@ -748,6 +971,11 @@ export function App() {
               >
                 <div className="discussion-rail-panel">
                   <div className="discussion-rail-header">
+                    <span
+                      className={`discussion-rail-status${agentAuth?.state === 'connected' ? ' discussion-rail-status-connected' : ' discussion-rail-status-disconnected'}`}
+                    >
+                      {renderRailAgentHint()}
+                    </span>
                     <div className="discussion-header-actions">
                       <button
                         className="secondary-button compact-button discussion-header-button"
@@ -788,7 +1016,9 @@ export function App() {
                       </div>
                     ) : (
                       <p className="empty-thread">
-                        Nothing here yet. Select a section or write about the document to get started.
+                        {agentAuth?.state === 'connected'
+                          ? 'Nothing here yet.'
+                          : 'Nothing here yet. Connect the agent in the menu if needed.'}
                       </p>
                     )}
                   </div>

@@ -8,7 +8,7 @@ The loop is:
 
 1. open a Markdown file for collaboration
 2. get a shareable local/Tailscale link
-3. open the artifact comfortably on phone
+3. open the document comfortably on phone
 4. direct the agent against a specific section or the full document
 5. let the agent revise the underlying file
 6. review the updated result and revision history
@@ -32,7 +32,7 @@ Use a small TypeScript web app with one local server.
 - Node.js
 - TypeScript
 - a small HTTP server framework such as Express
-- file-system access to real artifacts
+- file-system access to real documents
 - a lightweight JSON or SQLite-backed local state store
 
 ### Client
@@ -54,9 +54,9 @@ This is not the moment to optimize for SSR cleverness or a big framework.
 
 ## v0 Document Model
 
-The first supported artifact type is Markdown.
+The first supported document type is Markdown.
 
-Each artifact should have:
+Each document should have:
 
 - canonical file path
 - display title
@@ -79,7 +79,7 @@ Fields:
 - `id`
 - `filePath`
 - `title`
-- `artifactType`
+- `documentType`
 - `createdAt`
 - `updatedAt`
 
@@ -90,7 +90,7 @@ Derived from the Markdown structure.
 Fields:
 
 - `id`
-- `artifactSessionId`
+- `documentSessionId`
 - `headingText`
 - `level`
 - `startLine`
@@ -101,7 +101,7 @@ Fields:
 Fields:
 
 - `id`
-- `artifactSessionId`
+- `documentSessionId`
 - `sectionId`
 - `status`
 - `createdAt`
@@ -124,7 +124,7 @@ Represents a concrete proposed or applied change to the file.
 Fields:
 
 - `id`
-- `artifactSessionId`
+- `documentSessionId`
 - `summary`
 - `status` (`proposed`, `applied`, `rejected`)
 - `diffText`
@@ -135,7 +135,7 @@ Fields:
 ### Flow 1: Open Existing Markdown File
 
 1. choose a Markdown file path
-2. create or resume an artifact session
+2. create or resume a document session
 3. return a stable URL
 4. render the file on mobile
 5. show a section list and an obvious path to direct the agent in context
@@ -160,24 +160,22 @@ Fields:
 Keep URLs simple and stable.
 
 - `/`
-  list open or recent artifact sessions
-- `/artifacts/:sessionId`
-  artifact reading and commenting view
-- `/artifacts/:sessionId/history`
-  revisions and activity
+  open or resume a document via the current query-string handoff
+- `/?path=<repo-relative-document-path>`
+  document reading and commenting view for the resolved document path
 
-The shareable link should usually go directly to `/artifacts/:sessionId`.
+The shareable link should usually go directly to `/?path=<repo-relative-document-path>`.
 
 ## Minimal Agent Handoff Contract
 
-v0 needs an explicit contract for how an agent opens an artifact in Workshop.
+v0 needs an explicit contract for how an agent opens a document in Workshop.
 
 The contract should be:
 
-1. the caller provides a real artifact path
-2. Workshop opens or resumes an artifact session for that path
-3. Workshop returns a stable artifact URL
-4. the human lands directly in the artifact view
+1. the caller provides a real document path
+2. Workshop opens or resumes a document session for that path
+3. Workshop returns a stable document URL
+4. the human lands directly in the document view
 5. the UI exposes document identity and revision state without exposing local-path complexity
 
 This contract matters because the user experience should feel like:
@@ -299,7 +297,7 @@ Reasons:
 - better than inventing a custom file format
 - extensible without becoming infrastructure-heavy
 
-The artifact content itself still lives in real Markdown files, not in the database.
+The document content itself still lives in real Markdown files, not in the database.
 
 ## Markdown Rendering
 
@@ -325,9 +323,9 @@ Full inline text anchoring can come later.
 ## Initial Implementation Order
 
 1. Set up the app shell and local server.
-2. Add open/resume artifact session support for Markdown files.
+2. Add open/resume document session support for Markdown files.
 3. Parse Markdown into sections.
-4. Build the mobile-first artifact page.
+4. Build the mobile-first document page.
 5. Add section comment threads.
 6. Add revision history and file reparse on change.
 7. Add a clean link-sharing flow for local/Tailscale use.
@@ -336,7 +334,7 @@ Full inline text anchoring can come later.
 
 v0 is successful if:
 
-- a Markdown file can be opened as a Workshop artifact
+- a Markdown file can be opened as a Workshop document
 - the phone reading experience is comfortable
 - a human can comment on a section in context
 - an agent can revise the underlying file

@@ -10,7 +10,7 @@ Keep the shared task board for cross-project coordination and repo-level priorit
 ## Agent guidance
 - Read `AGENTS.md` first.
 - Read `docs/project-brief.md` and `docs/v0-technical-plan.md` before changing scope.
-- Keep the active slice narrow and artifact-centered.
+- Keep the active slice narrow and document-centered.
 - Favor phone-usable behavior over desktop-only polish.
 - Update this file when work meaningfully starts, shifts, or finishes.
 
@@ -30,7 +30,7 @@ Keep the shared task board for cross-project coordination and repo-level priorit
   - The agent-facing handoff contract is explicit enough that opening a document in Workshop does not depend on Scott-specific path knowledge leaking into the user experience.
   - The v1 agent loop is concrete enough to guide implementation instead of more abstract product discussion.
 - **Key files:**
-  - `server/server.mjs`
+  - `server/server.ts`
   - `src/App.tsx`
   - `src/styles.css`
   - `README.md`
@@ -63,4 +63,4 @@ Keep the shared task board for cross-project coordination and repo-level priorit
 ### Done
 
 #### WS-0000 Establish Workshop v0 product direction and initial prototype scaffold
-- **Outcome:** Repo scaffolded, product brief and v0 technical plan written, local app/server prototype created, and the first artifact review workspace plus composer/comment polish pass landed on July 1, 2026.
+- **Outcome:** Repo scaffolded, product brief and v0 technical plan written, local app/server prototype created, and the first document review workspace plus composer/comment polish pass landed on July 1, 2026.

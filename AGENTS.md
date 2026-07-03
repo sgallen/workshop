@@ -83,3 +83,10 @@ If not, the default answer is no.
 - `docs/project-brief.md`: internal rationale, UX spine, and scope discipline
 
 Keep both current. If the product idea shifts, update both.
+
+## Runtime Guardrails
+
+- Treat `server/server.ts` as the authoritative backend entrypoint.
+- Do not reintroduce or rely on a parallel legacy `server/server.mjs` runtime.
+- Remember that `vite preview` serves the built frontend only; auth and agent APIs still depend on the TypeScript backend being up separately.
+- When changing auth, agent actions, or API routes, verify the live process is actually the TS server before drawing conclusions from the UI.

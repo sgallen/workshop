@@ -1,8 +1,69 @@
-import express from 'express';
+import express, { type Request, type Response } from 'express';
 import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { marked } from 'marked';
+import {
+  disconnectAgent,
+  getAgentAuthStatus,
+  startAgentConnect
+} from './codex-agent.js';
+
+type AuthorType = 'human' | 'agent';
+
+type CommentRecord = {
+  id: string;
+  authorType: AuthorType;
+  body: string;
+  createdAt: string;
+  sectionId: string | null;
+};
+
+type LegacyCommentRecord = Omit<CommentRecord, 'sectionId'>;
+
+type SectionRecord = {
+  id: string;
+  headingText: string;
+  level: number;
+  startLine: number;
+  endLine: number;
+  markdown: string;
+  renderedHtml: string;
+};
+
+type ArtifactPayload = {
+  title: string;
+  relativePath: string;
+  absolutePath: string;
+  updatedAt: string;
+  renderedHtml: string;
+  comments: CommentRecord[];
+  sections: Array<SectionRecord & { comments: CommentRecord[] }>;
+};
+
+type ArtifactEntry = {
+  comments: CommentRecord[];
+  commentsBySection?: Record<string, LegacyCommentRecord[]>;
+};
+
+type RecentEntry = {
+  title: string;
+  relativePath: string;
+  updatedAt: string | null;
+  lastOpenedAt: string | null;
+  lastDiscussedAt?: string | null;
+};
+
+type RecentArtifactIdentity = {
+  title: string;
+  relativePath: string;
+  updatedAt: string | null;
+};
+
+type Store = {
+  artifacts: Record<string, ArtifactEntry>;
+  recents: RecentEntry[];
+};
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -19,13 +80,13 @@ marked.setOptions({ gfm: true, breaks: true });
 const app = express();
 app.use(express.json());
 
-function sortComments(comments) {
+function sortComments(comments: CommentRecord[]): CommentRecord[] {
   return [...comments].sort((left, right) => {
     return new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime();
   });
 }
 
-function slugify(value) {
+function slugify(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
@@ -33,11 +94,11 @@ function slugify(value) {
     .slice(0, 60) || 'section';
 }
 
-function isWithinSourceRoot(candidatePath) {
+function isWithinSourceRoot(candidatePath: string): boolean {
   return candidatePath === SOURCE_ROOT || candidatePath.startsWith(`${SOURCE_ROOT}${path.sep}`);
 }
 
-async function pathExists(candidatePath) {
+async function pathExists(candidatePath: string): Promise<boolean> {
   try {
     await fs.access(candidatePath);
     return true;
@@ -46,7 +107,11 @@ async function pathExists(candidatePath) {
   }
 }
 
-async function resolveArtifactPath(inputPath) {
+async function resolveArtifactPath(inputPath: string): Promise<{
+  requestedPath: string;
+  absolutePath: string;
+  relativePath: string;
+}> {
   const candidate = inputPath && inputPath.trim() ? inputPath.trim() : DEFAULT_ARTIFACT_PATH;
   const candidatePaths = path.isAbsolute(candidate)
     ? [candidate]
@@ -81,9 +146,9 @@ async function resolveArtifactPath(inputPath) {
   };
 }
 
-function parseSections(markdown) {
+function parseSections(markdown: string): SectionRecord[] {
   const lines = markdown.split('\n');
-  const headings = [];
+  const headings: Array<Pick<SectionRecord, 'level' | 'headingText' | 'startLine'>> = [];
 
   for (let index = 0; index < lines.length; index += 1) {
     const match = /^(#{1,6})\s+(.+?)\s*$/.exec(lines[index]);
@@ -108,7 +173,7 @@ function parseSections(markdown) {
         startLine: 1,
         endLine: lines.length,
         markdown,
-        renderedHtml: marked.parse(markdown)
+        renderedHtml: marked.parse(markdown) as string
       }
     ];
   }
@@ -125,12 +190,12 @@ function parseSections(markdown) {
       startLine: heading.startLine,
       endLine,
       markdown: sectionMarkdown,
-      renderedHtml: marked.parse(sectionMarkdown)
+      renderedHtml: marked.parse(sectionMarkdown) as string
     };
   });
 }
 
-async function ensureDataFile() {
+async function ensureDataFile(): Promise<void> {
   await fs.mkdir(DATA_DIR, { recursive: true });
 
   try {
@@ -140,32 +205,27 @@ async function ensureDataFile() {
   }
 }
 
-function ensureStoreShape(store) {
-  const nextStore = store && typeof store === 'object' ? store : {};
+function ensureStoreShape(store: unknown): Store {
+  const candidate = store && typeof store === 'object' ? (store as Partial<Store>) : {};
 
-  if (!nextStore.artifacts || typeof nextStore.artifacts !== 'object') {
-    nextStore.artifacts = {};
-  }
-
-  if (!Array.isArray(nextStore.recents)) {
-    nextStore.recents = [];
-  }
-
-  return nextStore;
+  return {
+    artifacts: candidate.artifacts && typeof candidate.artifacts === 'object' ? candidate.artifacts : {},
+    recents: Array.isArray(candidate.recents) ? candidate.recents : []
+  };
 }
 
-async function readStore() {
+async function readStore(): Promise<Store> {
   await ensureDataFile();
   const raw = await fs.readFile(DATA_FILE, 'utf8');
   return ensureStoreShape(JSON.parse(raw));
 }
 
-async function writeStore(store) {
+async function writeStore(store: Store): Promise<void> {
   await ensureDataFile();
   await fs.writeFile(DATA_FILE, JSON.stringify(ensureStoreShape(store), null, 2));
 }
 
-function getArtifactEntry(store, relativePath) {
+function getArtifactEntry(store: Store, relativePath: string): ArtifactEntry {
   if (!store.artifacts[relativePath]) {
     store.artifacts[relativePath] = { comments: [] };
   }
@@ -173,7 +233,7 @@ function getArtifactEntry(store, relativePath) {
   const artifactEntry = store.artifacts[relativePath];
 
   if (!Array.isArray(artifactEntry.comments)) {
-    const migratedComments = [];
+    const migratedComments: CommentRecord[] = [];
     const commentsBySection = artifactEntry.commentsBySection ?? {};
 
     for (const [sectionId, comments] of Object.entries(commentsBySection)) {
@@ -192,30 +252,28 @@ function getArtifactEntry(store, relativePath) {
   return artifactEntry;
 }
 
-function ensureRecentArtifact(store, artifact) {
-  const existingIndex = store.recents.findIndex((entry) => entry.relativePath === artifact.relativePath);
-
-  if (existingIndex >= 0) {
-    store.recents[existingIndex] = {
-      ...store.recents[existingIndex],
-      title: artifact.title,
-      updatedAt: artifact.updatedAt
-    };
-    return;
-  }
-
-  store.recents.push({
+function ensureRecentArtifact(store: Store, artifact: RecentArtifactIdentity): void {
+  const openedAt = new Date().toISOString();
+  const existingEntry = store.recents.find((entry) => entry.relativePath === artifact.relativePath);
+  const nextEntry: RecentEntry = {
+    ...existingEntry,
     title: artifact.title,
     relativePath: artifact.relativePath,
     updatedAt: artifact.updatedAt,
-    lastOpenedAt: new Date().toISOString()
-  });
-  store.recents = store.recents.slice(-24);
+    lastOpenedAt: openedAt
+  };
+
+  const filtered = store.recents.filter((entry) => entry.relativePath !== artifact.relativePath);
+  store.recents = [nextEntry, ...filtered].slice(0, 24);
 }
 
-function recordRecentDiscussion(store, artifact, discussedAt = new Date().toISOString()) {
+function recordRecentDiscussion(
+  store: Store,
+  artifact: RecentArtifactIdentity,
+  discussedAt = new Date().toISOString()
+): void {
   const existingEntry = store.recents.find((entry) => entry.relativePath === artifact.relativePath);
-  const nextEntry = {
+  const nextEntry: RecentEntry = {
     ...existingEntry,
     title: artifact.title,
     relativePath: artifact.relativePath,
@@ -228,7 +286,7 @@ function recordRecentDiscussion(store, artifact, discussedAt = new Date().toISOS
   store.recents = [nextEntry, ...filtered].slice(0, 24);
 }
 
-function listRecentArtifacts(store) {
+function listRecentArtifacts(store: Store): Array<RecentEntry & { commentCount: number }> {
   return store.recents
     .filter((entry) => {
       return Boolean(entry && typeof entry.relativePath === 'string');
@@ -247,7 +305,7 @@ function listRecentArtifacts(store) {
     });
 }
 
-async function loadArtifactPayload(requestedPath) {
+async function loadArtifactPayload(requestedPath: string): Promise<ArtifactPayload> {
   const { absolutePath, relativePath } = await resolveArtifactPath(requestedPath);
   const markdown = await fs.readFile(absolutePath, 'utf8');
   const stats = await fs.stat(absolutePath);
@@ -261,7 +319,7 @@ async function loadArtifactPayload(requestedPath) {
     relativePath,
     absolutePath,
     updatedAt: stats.mtime.toISOString(),
-    renderedHtml: marked.parse(markdown),
+    renderedHtml: marked.parse(markdown) as string,
     comments,
     sections: sections.map((section) => ({
       ...section,
@@ -270,7 +328,7 @@ async function loadArtifactPayload(requestedPath) {
   };
 }
 
-function getAppOrigin(request) {
+function getAppOrigin(request: Request): string {
   if (APP_ORIGIN) {
     return APP_ORIGIN.replace(/\/+$/, '');
   }
@@ -281,13 +339,13 @@ function getAppOrigin(request) {
   const proto = typeof forwardedProto === 'string' ? forwardedProto : 'http';
 
   if (!host) {
-    return `http://127.0.0.1:4173`;
+    return 'http://127.0.0.1:4173';
   }
 
   return `${proto}://${host.replace(/:\d+$/, ':4173')}`;
 }
 
-app.get('/api/health', (_request, response) => {
+app.get('/api/health', (_request: Request, response: Response) => {
   response.json({
     ok: true,
     rootDir: ROOT_DIR,
@@ -296,14 +354,14 @@ app.get('/api/health', (_request, response) => {
   });
 });
 
-app.get('/api/config', (request, response) => {
+app.get('/api/config', (request: Request, response: Response) => {
   response.json({
     appOrigin: getAppOrigin(request),
     defaultArtifactPath: DEFAULT_ARTIFACT_PATH
   });
 });
 
-app.get('/api/artifact', async (request, response) => {
+app.get('/api/artifact', async (request: Request, response: Response) => {
   try {
     const artifact = await loadArtifactPayload(String(request.query.path ?? ''));
     const store = await readStore();
@@ -317,7 +375,7 @@ app.get('/api/artifact', async (request, response) => {
   }
 });
 
-app.get('/api/artifact/meta', async (request, response) => {
+app.get('/api/artifact/meta', async (request: Request, response: Response) => {
   try {
     const { absolutePath, relativePath } = await resolveArtifactPath(String(request.query.path ?? ''));
     const stats = await fs.stat(absolutePath);
@@ -334,7 +392,7 @@ app.get('/api/artifact/meta', async (request, response) => {
   }
 });
 
-app.get('/api/comments', async (request, response) => {
+app.get('/api/comments', async (request: Request, response: Response) => {
   try {
     const artifact = await loadArtifactPayload(String(request.query.path ?? ''));
     response.json({
@@ -348,7 +406,7 @@ app.get('/api/comments', async (request, response) => {
   }
 });
 
-app.get('/api/recents', async (_request, response) => {
+app.get('/api/recents', async (_request: Request, response: Response) => {
   try {
     const store = await readStore();
     response.json({
@@ -361,10 +419,50 @@ app.get('/api/recents', async (_request, response) => {
   }
 });
 
-app.post('/api/comments', async (request, response) => {
-  const { path: artifactPath, sectionId, body } = request.body ?? {};
+app.get('/api/agent/auth-status', async (_request: Request, response: Response) => {
+  try {
+    const auth = await getAgentAuthStatus(ROOT_DIR);
+    response.json({ auth });
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to inspect agent auth.'
+    });
+  }
+});
 
-  if (typeof artifactPath !== 'string' || typeof body !== 'string') {
+app.post('/api/agent/connect', async (_request: Request, response: Response) => {
+  try {
+    const auth = await startAgentConnect(ROOT_DIR);
+    response.json({ auth });
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to start Codex login.'
+    });
+  }
+});
+
+app.post('/api/agent/disconnect', async (_request: Request, response: Response) => {
+  try {
+    const auth = await disconnectAgent(ROOT_DIR);
+    response.json({ auth });
+  } catch (error) {
+    response.status(500).json({
+      error: error instanceof Error ? error.message : 'Failed to disconnect Codex.'
+    });
+  }
+});
+
+app.post('/api/comments', async (request: Request, response: Response) => {
+  const body = request.body as {
+    path?: unknown;
+    sectionId?: unknown;
+    body?: unknown;
+  } | undefined;
+  const artifactPath = body?.path;
+  const sectionId = body?.sectionId;
+  const commentBody = body?.body;
+
+  if (typeof artifactPath !== 'string' || typeof commentBody !== 'string') {
     response.status(400).json({ error: 'Expected path and body.' });
     return;
   }
@@ -374,7 +472,7 @@ app.post('/api/comments', async (request, response) => {
     return;
   }
 
-  const trimmedBody = body.trim();
+  const trimmedBody = commentBody.trim();
 
   if (!trimmedBody) {
     response.status(400).json({ error: 'Comment body cannot be empty.' });
@@ -394,6 +492,7 @@ app.post('/api/comments', async (request, response) => {
       createdAt,
       sectionId: typeof sectionId === 'string' ? sectionId : null
     });
+
     recordRecentDiscussion(store, {
       title: path.basename(relativePath),
       relativePath,

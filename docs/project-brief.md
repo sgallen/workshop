@@ -149,7 +149,7 @@ After the Markdown-first agent-document loop works well, likely product expansio
 1. richer agent actions against sections and full documents
 2. cross-device continuity, sync, and backup
 3. collaboration and shared document workflows
-4. richer region targeting and additional artifact types
+4. richer region targeting and additional document types
 
 That order matters. The agent-document loop solves the current pain most directly and with the least scope risk.
 

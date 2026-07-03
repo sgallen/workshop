@@ -1,0 +1,278 @@
+import { ChildProcess, spawn, spawnSync } from 'node:child_process';
+import { promises as fs } from 'node:fs';
+import path from 'node:path';
+
+export type AgentAuthState = 'not_connected' | 'connecting' | 'connected' | 'expired' | 'error';
+
+export type AgentAuthStatus = {
+  state: AgentAuthState;
+  provider: 'openai-codex';
+  authMode?: 'chatgpt';
+  accountLabel?: string;
+  authUrl?: string;
+  code?: string | null;
+  startedAt?: string;
+  message?: string;
+};
+
+type ActiveLoginAttempt = {
+  child: ChildProcess;
+  output: string;
+  authUrl: string;
+  code: string | null;
+  startedAt: string;
+};
+
+const AUTH_STATUS = {
+  NOT_CONNECTED: 'not_connected',
+  CONNECTING: 'connecting',
+  CONNECTED: 'connected',
+  EXPIRED: 'expired',
+  ERROR: 'error'
+} as const;
+
+const DEVICE_AUTH_URL = 'https://auth.openai.com/codex/device';
+
+function stripAnsi(value: string): string {
+  return value.replace(/\u001b\[[0-9;]*m/g, '');
+}
+
+function resolveCodexHome(rootDir: string): string {
+  return path.join(rootDir, '.workshop-data', 'codex');
+}
+
+function resolveAuthFile(rootDir: string): string {
+  return path.join(resolveCodexHome(rootDir), 'auth.json');
+}
+
+function resolveCodexConfigFile(rootDir: string): string {
+  return path.join(resolveCodexHome(rootDir), 'config.toml');
+}
+
+function createCodexEnv(rootDir: string): NodeJS.ProcessEnv {
+  return {
+    ...process.env,
+    CODEX_HOME: resolveCodexHome(rootDir)
+  };
+}
+
+async function ensureCodexConfig(rootDir: string): Promise<void> {
+  const codexHome = resolveCodexHome(rootDir);
+  const configFile = resolveCodexConfigFile(rootDir);
+
+  await fs.mkdir(codexHome, { recursive: true });
+  await fs.writeFile(configFile, 'cli_auth_credentials_store = "file"\n');
+}
+
+async function authFileExists(rootDir: string): Promise<boolean> {
+  try {
+    await fs.access(resolveAuthFile(rootDir));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function parseDeviceCode(output: string): { authUrl: string; code: string | null } {
+  const clean = stripAnsi(output);
+  const urlMatch = clean.match(/https:\/\/auth\.openai\.com\/codex\/device/);
+  const codeMatch = clean.match(/\b[A-Z0-9]{4,6}-[A-Z0-9]{4,6}\b/);
+
+  return {
+    authUrl: urlMatch?.[0] ?? DEVICE_AUTH_URL,
+    code: codeMatch?.[0] ?? null
+  };
+}
+
+function parseConnectedIdentity(stdout: string): string {
+  const clean = stripAnsi(stdout);
+  const match = clean.match(/Logged in using (.+)/i);
+  return match?.[1]?.trim() ?? 'ChatGPT';
+}
+
+let activeLoginAttempt: ActiveLoginAttempt | null = null;
+let lastAuthError: string | null = null;
+
+function getConnectingStatus(): AgentAuthStatus | null {
+  if (!activeLoginAttempt) {
+    return null;
+  }
+
+  return {
+    state: AUTH_STATUS.CONNECTING,
+    provider: 'openai-codex',
+    authUrl: activeLoginAttempt.authUrl,
+    code: activeLoginAttempt.code,
+    startedAt: activeLoginAttempt.startedAt,
+    message: 'Finish the device-code login to connect Workshop to your Codex account.'
+  };
+}
+
+export async function getAgentAuthStatus(rootDir: string): Promise<AgentAuthStatus> {
+  await ensureCodexConfig(rootDir);
+
+  const connecting = getConnectingStatus();
+
+  if (connecting) {
+    return connecting;
+  }
+
+  const result = spawnSync('codex', ['login', 'status'], {
+    env: createCodexEnv(rootDir),
+    encoding: 'utf8'
+  });
+
+  if (result.status === 0) {
+    lastAuthError = null;
+
+    return {
+      state: AUTH_STATUS.CONNECTED,
+      provider: 'openai-codex',
+      authMode: 'chatgpt',
+      accountLabel: parseConnectedIdentity(result.stdout)
+    };
+  }
+
+  const hasStoredAuth = await authFileExists(rootDir);
+
+  if (lastAuthError) {
+    return {
+      state: AUTH_STATUS.ERROR,
+      provider: 'openai-codex',
+      message: lastAuthError
+    };
+  }
+
+  if (hasStoredAuth) {
+    return {
+      state: AUTH_STATUS.EXPIRED,
+      provider: 'openai-codex',
+      message: 'Stored Codex credentials are present but not currently usable. Reconnect to continue.'
+    };
+  }
+
+  return {
+    state: AUTH_STATUS.NOT_CONNECTED,
+    provider: 'openai-codex'
+  };
+}
+
+export async function startAgentConnect(rootDir: string): Promise<AgentAuthStatus> {
+  await ensureCodexConfig(rootDir);
+
+  const currentStatus = await getAgentAuthStatus(rootDir);
+
+  if (currentStatus.state === AUTH_STATUS.CONNECTED || currentStatus.state === AUTH_STATUS.CONNECTING) {
+    return currentStatus;
+  }
+
+  lastAuthError = null;
+
+  const child = spawn('codex', ['login', '--device-auth'], {
+    env: createCodexEnv(rootDir),
+    cwd: rootDir,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
+
+  activeLoginAttempt = {
+    child,
+    output: '',
+    authUrl: DEVICE_AUTH_URL,
+    code: null,
+    startedAt: new Date().toISOString()
+  };
+
+  child.stdout.on('data', (chunk: Buffer) => {
+    if (!activeLoginAttempt || activeLoginAttempt.child !== child) {
+      return;
+    }
+
+    activeLoginAttempt.output += String(chunk);
+    const parsed = parseDeviceCode(activeLoginAttempt.output);
+    activeLoginAttempt.authUrl = parsed.authUrl;
+    activeLoginAttempt.code = parsed.code;
+  });
+
+  child.stderr.on('data', (chunk: Buffer) => {
+    if (!activeLoginAttempt || activeLoginAttempt.child !== child) {
+      return;
+    }
+
+    activeLoginAttempt.output += String(chunk);
+  });
+
+  child.on('exit', async (code) => {
+    const finishedAttempt = activeLoginAttempt && activeLoginAttempt.child === child ? activeLoginAttempt : null;
+
+    if (finishedAttempt) {
+      activeLoginAttempt = null;
+    }
+
+    if (!finishedAttempt) {
+      return;
+    }
+
+    if (code === 0) {
+      try {
+        const status = await getAgentAuthStatus(rootDir);
+
+        if (status.state !== AUTH_STATUS.CONNECTED) {
+          lastAuthError = 'Codex login finished, but Workshop could not confirm a connected account.';
+        }
+      } catch {
+        lastAuthError = 'Codex login finished, but Workshop could not confirm a connected account.';
+      }
+
+      return;
+    }
+
+    const output = stripAnsi(finishedAttempt.output).trim();
+    lastAuthError = output || 'Codex login did not complete.';
+  });
+
+  const deadline = Date.now() + 5000;
+
+  while (Date.now() < deadline) {
+    const status = getConnectingStatus();
+
+    if (status?.code) {
+      return status;
+    }
+
+    await new Promise((resolve) => {
+      setTimeout(resolve, 100);
+    });
+  }
+
+  return getConnectingStatus() ?? {
+    state: AUTH_STATUS.ERROR,
+    provider: 'openai-codex',
+    message: 'Codex login started, but Workshop could not read the device code.'
+  };
+}
+
+export async function disconnectAgent(rootDir: string): Promise<AgentAuthStatus> {
+  await ensureCodexConfig(rootDir);
+
+  if (activeLoginAttempt) {
+    activeLoginAttempt.child.kill('SIGINT');
+    activeLoginAttempt = null;
+  }
+
+  const result = spawnSync('codex', ['logout'], {
+    env: createCodexEnv(rootDir),
+    encoding: 'utf8'
+  });
+
+  if (result.status !== 0) {
+    const message = stripAnsi(result.stderr || result.stdout || '').trim();
+    throw new Error(message || 'Failed to disconnect Codex.');
+  }
+
+  lastAuthError = null;
+
+  return {
+    state: AUTH_STATUS.NOT_CONNECTED,
+    provider: 'openai-codex'
+  };
+}
