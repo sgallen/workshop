@@ -43,6 +43,11 @@ type ArtifactPayload = {
 
 type ArtifactEntry = {
   comments: CommentRecord[];
+  title?: string;
+  updatedAt?: string | null;
+  lastOpenedAt?: string | null;
+  lastActivityAt?: string | null;
+  lastDiscussedAt?: string | null;
   commentsBySection?: Record<string, LegacyCommentRecord[]>;
 };
 
@@ -62,7 +67,7 @@ type RecentArtifactIdentity = {
 
 type Store = {
   artifacts: Record<string, ArtifactEntry>;
-  recents: RecentEntry[];
+  recents?: RecentEntry[];
 };
 
 const __filename = fileURLToPath(import.meta.url);
@@ -201,7 +206,7 @@ async function ensureDataFile(): Promise<void> {
   try {
     await fs.access(DATA_FILE);
   } catch {
-    await fs.writeFile(DATA_FILE, JSON.stringify({ artifacts: {}, recents: [] }, null, 2));
+    await fs.writeFile(DATA_FILE, JSON.stringify({ artifacts: {} }, null, 2));
   }
 }
 
@@ -217,7 +222,9 @@ function ensureStoreShape(store: unknown): Store {
 async function readStore(): Promise<Store> {
   await ensureDataFile();
   const raw = await fs.readFile(DATA_FILE, 'utf8');
-  return ensureStoreShape(JSON.parse(raw));
+  const store = ensureStoreShape(JSON.parse(raw));
+  migrateRecentsIntoArtifacts(store);
+  return store;
 }
 
 async function writeStore(store: Store): Promise<void> {
@@ -252,19 +259,37 @@ function getArtifactEntry(store: Store, relativePath: string): ArtifactEntry {
   return artifactEntry;
 }
 
+function migrateRecentsIntoArtifacts(store: Store): void {
+  for (const recent of store.recents ?? []) {
+    if (!recent || typeof recent.relativePath !== 'string') {
+      continue;
+    }
+
+    const artifactEntry = getArtifactEntry(store, recent.relativePath);
+    artifactEntry.title = artifactEntry.title ?? recent.title;
+    artifactEntry.updatedAt = artifactEntry.updatedAt ?? recent.updatedAt ?? null;
+    artifactEntry.lastOpenedAt = artifactEntry.lastOpenedAt ?? recent.lastOpenedAt ?? null;
+    artifactEntry.lastDiscussedAt = artifactEntry.lastDiscussedAt ?? recent.lastDiscussedAt ?? null;
+    artifactEntry.lastActivityAt = artifactEntry.lastActivityAt ?? recent.lastDiscussedAt ?? null;
+  }
+
+  delete store.recents;
+}
+
+function ensureArtifactMetadata(
+  artifactEntry: ArtifactEntry,
+  artifact: RecentArtifactIdentity,
+  openedAt = new Date().toISOString()
+): void {
+  artifactEntry.title = artifact.title;
+  artifactEntry.updatedAt = artifact.updatedAt ?? artifactEntry.updatedAt ?? null;
+  artifactEntry.lastOpenedAt = artifactEntry.lastOpenedAt ?? openedAt;
+}
+
 function ensureRecentArtifact(store: Store, artifact: RecentArtifactIdentity): void {
   const openedAt = new Date().toISOString();
-  const existingEntry = store.recents.find((entry) => entry.relativePath === artifact.relativePath);
-  const nextEntry: RecentEntry = {
-    ...existingEntry,
-    title: artifact.title,
-    relativePath: artifact.relativePath,
-    updatedAt: artifact.updatedAt,
-    lastOpenedAt: openedAt
-  };
-
-  const filtered = store.recents.filter((entry) => entry.relativePath !== artifact.relativePath);
-  store.recents = [nextEntry, ...filtered].slice(0, 24);
+  const artifactEntry = getArtifactEntry(store, artifact.relativePath);
+  ensureArtifactMetadata(artifactEntry, artifact, openedAt);
 }
 
 function recordRecentDiscussion(
@@ -272,37 +297,40 @@ function recordRecentDiscussion(
   artifact: RecentArtifactIdentity,
   discussedAt = new Date().toISOString()
 ): void {
-  const existingEntry = store.recents.find((entry) => entry.relativePath === artifact.relativePath);
-  const nextEntry: RecentEntry = {
-    ...existingEntry,
-    title: artifact.title,
-    relativePath: artifact.relativePath,
-    updatedAt: artifact.updatedAt,
-    lastOpenedAt: existingEntry?.lastOpenedAt ?? discussedAt,
-    lastDiscussedAt: discussedAt
-  };
-
-  const filtered = store.recents.filter((entry) => entry.relativePath !== artifact.relativePath);
-  store.recents = [nextEntry, ...filtered].slice(0, 24);
+  const artifactEntry = getArtifactEntry(store, artifact.relativePath);
+  ensureArtifactMetadata(artifactEntry, artifact, discussedAt);
+  artifactEntry.lastDiscussedAt = discussedAt;
+  artifactEntry.lastActivityAt = discussedAt;
 }
 
 function listRecentArtifacts(store: Store): Array<RecentEntry & { commentCount: number }> {
-  return store.recents
-    .filter((entry) => {
-      return Boolean(entry && typeof entry.relativePath === 'string');
-    })
-    .map((entry) => {
-      const artifactEntry = getArtifactEntry(store, entry.relativePath);
-
+  return Object.entries(store.artifacts)
+    .map(([relativePath, artifactEntry]) => {
       return {
-        title: typeof entry.title === 'string' && entry.title.trim() ? entry.title : path.basename(entry.relativePath),
-        relativePath: entry.relativePath,
-        updatedAt: typeof entry.updatedAt === 'string' ? entry.updatedAt : null,
-        lastOpenedAt: typeof entry.lastOpenedAt === 'string' ? entry.lastOpenedAt : null,
-        lastDiscussedAt: typeof entry.lastDiscussedAt === 'string' ? entry.lastDiscussedAt : null,
+        title: typeof artifactEntry.title === 'string' && artifactEntry.title.trim() ? artifactEntry.title : path.basename(relativePath),
+        relativePath,
+        updatedAt: typeof artifactEntry.updatedAt === 'string' ? artifactEntry.updatedAt : null,
+        lastOpenedAt: typeof artifactEntry.lastOpenedAt === 'string' ? artifactEntry.lastOpenedAt : null,
+        lastDiscussedAt: typeof artifactEntry.lastDiscussedAt === 'string' ? artifactEntry.lastDiscussedAt : null,
+        lastActivityAt: typeof artifactEntry.lastActivityAt === 'string' ? artifactEntry.lastActivityAt : null,
         commentCount: Array.isArray(artifactEntry.comments) ? artifactEntry.comments.length : 0
       };
-    });
+    })
+    .sort((left, right) => {
+      const leftHasMeaningfulActivity = left.lastActivityAt !== null;
+      const rightHasMeaningfulActivity = right.lastActivityAt !== null;
+
+      if (leftHasMeaningfulActivity !== rightHasMeaningfulActivity) {
+        return rightHasMeaningfulActivity ? 1 : -1;
+      }
+
+      const leftTime = left.lastActivityAt ?? left.lastOpenedAt;
+      const rightTime = right.lastActivityAt ?? right.lastOpenedAt;
+      return new Date(rightTime ?? 0).getTime() - new Date(leftTime ?? 0).getTime();
+    })
+    .filter((entry) => entry.lastActivityAt !== null || entry.lastOpenedAt !== null)
+    .slice(0, 24)
+    .map(({ lastActivityAt: _lastActivityAt, ...entry }) => entry);
 }
 
 async function loadArtifactPayload(requestedPath: string): Promise<ArtifactPayload> {

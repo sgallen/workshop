@@ -42,6 +42,7 @@ Keep the shared task board for cross-project coordination and repo-level priorit
   - Tighten document/session UI around revision awareness.
   - Clarify the handoff shape from agent -> Workshop link -> human review.
   - Define the minimum useful agent actions for v1.
+  - Convert the interaction model into an implementation-ready blueprint in `docs/agent-editing-v1-blueprint.md`.
 
 ### Ready
 

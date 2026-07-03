@@ -107,6 +107,76 @@ function formatRecentActivity(recent: RecentArtifact) {
   return 'Recent document';
 }
 
+function buildDisplayedRecents(
+  artifact: Artifact | null,
+  recentArtifacts: RecentArtifact[],
+  activeCommentCount: number
+): RecentArtifact[] {
+  if (!artifact) {
+    if (recentArtifacts.length >= 3) {
+      return recentArtifacts;
+    }
+
+    const seen = new Set(recentArtifacts.map((recent) => recent.relativePath));
+    const seeded = [...recentArtifacts];
+
+    for (const candidate of DEMO_RECENT_CANDIDATES) {
+      if (seen.has(candidate.relativePath)) {
+        continue;
+      }
+
+      seeded.push(candidate);
+      seen.add(candidate.relativePath);
+
+      if (seeded.length >= 3) {
+        break;
+      }
+    }
+
+    return seeded;
+  }
+
+  // The active document must remain present in the drawer so it can highlight,
+  // but merely opening an existing document must not reorder the stored recents list.
+  const seeded = [...recentArtifacts];
+  const activeIndex = seeded.findIndex((recent) => recent.relativePath === artifact.relativePath);
+
+  if (activeIndex === -1) {
+    seeded.unshift({
+      title: artifact.title,
+      relativePath: artifact.relativePath,
+      updatedAt: artifact.updatedAt,
+      lastOpenedAt: artifact.updatedAt,
+      lastDiscussedAt: null,
+      commentCount: activeCommentCount
+    });
+  } else {
+    seeded[activeIndex] = {
+      ...seeded[activeIndex],
+      title: artifact.title,
+      updatedAt: artifact.updatedAt,
+      commentCount: activeCommentCount
+    };
+  }
+
+  const seen = new Set(seeded.map((recent) => recent.relativePath));
+
+  for (const candidate of DEMO_RECENT_CANDIDATES) {
+    if (seen.has(candidate.relativePath) || candidate.relativePath === artifact.relativePath) {
+      continue;
+    }
+
+    seeded.push(candidate);
+    seen.add(candidate.relativePath);
+
+    if (seeded.length >= 3) {
+      break;
+    }
+  }
+
+  return seeded;
+}
+
 export function App() {
   const initialPath = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -197,59 +267,7 @@ export function App() {
   const interactiveOverlay = menuOpen;
   const showComposerUtilityRow = Boolean(attachedSection || hasRemoteUpdate);
   const displayedRecentArtifacts = useMemo(() => {
-    if (!artifact) {
-      if (recentArtifacts.length >= 3) {
-        return recentArtifacts;
-      }
-
-      const seen = new Set(recentArtifacts.map((recent) => recent.relativePath));
-      const seeded = [...recentArtifacts];
-
-      for (const candidate of DEMO_RECENT_CANDIDATES) {
-        if (seen.has(candidate.relativePath)) {
-          continue;
-        }
-
-        seeded.push(candidate);
-        seen.add(candidate.relativePath);
-
-        if (seeded.length >= 3) {
-          break;
-        }
-      }
-
-      return seeded;
-    }
-
-    const activeRecent = recentArtifacts.find((recent) => recent.relativePath === artifact.relativePath) ?? {
-      title: artifact.title,
-      relativePath: artifact.relativePath,
-      updatedAt: artifact.updatedAt,
-      lastOpenedAt: artifact.updatedAt,
-      lastDiscussedAt: null,
-      commentCount: conversationComments.length
-    };
-
-    const seeded = [
-      activeRecent,
-      ...recentArtifacts.filter((recent) => recent.relativePath !== artifact.relativePath)
-    ];
-    const seen = new Set(seeded.map((recent) => recent.relativePath));
-
-    for (const candidate of DEMO_RECENT_CANDIDATES) {
-      if (seen.has(candidate.relativePath) || candidate.relativePath === artifact.relativePath) {
-        continue;
-      }
-
-      seeded.push(candidate);
-      seen.add(candidate.relativePath);
-
-      if (seeded.length >= 3) {
-        break;
-      }
-    }
-
-    return seeded;
+    return buildDisplayedRecents(artifact, recentArtifacts, conversationComments.length);
   }, [artifact, recentArtifacts, conversationComments.length]);
 
   useEffect(() => {
