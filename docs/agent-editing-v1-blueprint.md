@@ -6,6 +6,9 @@ Turn the recent product discussion into a concrete implementation spec that codi
 
 This blueprint is intentionally opinionated and narrow.
 
+This doc defines the product model for the next web agent-document loop.
+For the architectural extraction path that should make this model reusable across web and future native shells, see `docs/shared-core-multi-shell-refactor-plan.md`.
+
 ## Product Summary
 
 Workshop should support document workshopping through three connected layers:
@@ -767,6 +770,32 @@ This lets `App.tsx` update:
 - revision affordances
 
 without requiring an immediate burst of follow-up fetches.
+
+### Suggested First Client State Additions
+
+The first `App.tsx` implementation does not need a big client architecture rewrite.
+
+Recommended added state:
+
+- `activeProposalSet`
+  - current pending proposal set for the open document
+- `revisions`
+  - lightweight latest-first revision list for the open document
+- `appliedRevisionId`
+  - optional short-lived state for highlighting the newest accepted revision
+- `agentTurnPending`
+  - separate from auth loading so the UI can distinguish "agent is thinking" from "provider/auth state is loading"
+
+Recommended non-goals for the first pass:
+
+- do not introduce a global reducer unless the first slice becomes hard to reason about
+- do not build multi-document proposal caching before one-document behavior is stable
+- do not block the existing discussion/comment flow on the full proposal model landing at once
+
+Practical first rendering rule:
+
+- if `activeProposalSet` is `null`, the app should behave almost exactly like today's experience
+- if `activeProposalSet` exists, the document pane and discussion rail should layer proposal UI on top of the existing document/comment experience rather than replacing it wholesale
 
 ## Notes For Future Versions
 

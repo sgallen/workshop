@@ -91,6 +91,28 @@ That separation matters:
 - external tools handle discovery and handoff
 - Workshop handles the actual workshopping loop
 
+## Architecture Direction
+
+Workshop's current implementation is a local web shell backed by a TypeScript server.
+
+That is the current product surface, not the intended long-term architectural boundary.
+
+The intended direction is:
+
+- shared product core for documents, proposals, revisions, recents, and section semantics
+- runtime adapters for file access, storage, and agent/provider integration
+- multiple shells over time:
+  - today's web/OpenClaw-invoked shell
+  - a future first-class native shell
+
+This matters because Workshop should not have to reinvent its product model separately for web and mobile.
+
+Near-term priority remains:
+
+1. refactor toward shared core seams
+2. get the web agent-document loop working well
+3. only then move into native shell implementation
+
 ## Local Runtime
 
 Workshop now has two distinct runtime pieces:
@@ -127,6 +149,11 @@ npm run preview
 Serves the built frontend bundle only. This is useful for checking the static UI, but by itself it is not a complete Workshop instance and does not replace the TypeScript API server.
 
 If auth or agent actions appear missing, check that the running backend is `server/server.ts` rather than a stale older process.
+
+Relevant internal design docs:
+
+- `docs/agent-editing-v1-blueprint.md`
+- `docs/shared-core-multi-shell-refactor-plan.md`
 
 ## The Test
 

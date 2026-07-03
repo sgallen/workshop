@@ -2,17 +2,17 @@
 
 This repo should stay tightly aligned to one problem:
 
-How should a human and an agent refine an artifact together once chat stops being enough?
+How should a human and an agent refine a document together once chat stops being enough?
 
 ## Purpose
 
-Workshop is a local-first collaboration surface for human-agent iteration on artifacts.
+Workshop is a local-first collaboration surface for human-agent iteration on documents.
 
-The initial focus is Markdown-first refinement with a path to HTML artifacts later.
+The initial focus is Markdown-first refinement, with room for richer artifact types later.
 
 ## Non-Negotiable Constraints
 
-- Keep the artifact at the center, not the chat transcript.
+- Keep the document at the center, not the chat transcript.
 - Keep real files as the source of truth.
 - Keep the experience usable from a phone.
 - Keep the system local-first and Tailscale-friendly.
@@ -38,8 +38,8 @@ It should not feel like:
 
 The key move is:
 
-1. a conversation produces or identifies an artifact
-2. the agent opens that artifact in Workshop
+1. a conversation produces or identifies a document
+2. the agent opens that document in Workshop
 3. the human follows a link into the focused workspace
 4. comments and revisions happen there
 5. changes apply to the underlying file
@@ -69,10 +69,10 @@ Avoid:
 
 Before adding something, ask:
 
-1. Does this make artifact refinement between a human and an agent better?
+1. Does this make document refinement between a human and an agent better?
 2. Does this help on phone as well as laptop?
 3. Does this preserve a simple mental model?
-4. Does this keep the artifact and file real?
+4. Does this keep the document and file real?
 5. Is this solving a concrete pain we actually hit?
 
 If not, the default answer is no.
@@ -83,6 +83,24 @@ If not, the default answer is no.
 - `docs/project-brief.md`: internal rationale, UX spine, and scope discipline
 
 Keep both current. If the product idea shifts, update both.
+
+## Architecture Direction
+
+- The current shell is a local web app plus a TypeScript server.
+- The longer-term target is `shared core + multiple shells`, not a permanent one-off web implementation.
+- Durable product logic should move toward shared core modules for documents, proposals, revisions, recents, and section semantics.
+- Runtime-specific behavior should stay in adapters.
+- Web/OpenClaw-invoked and future native shells should consume the same product model instead of re-implementing it.
+
+## Current Execution Order
+
+Work the repo in this order unless a strong reason appears to change it:
+
+1. tighten the shared core seams
+2. get the web agent-document loop working well
+3. only then begin the first-class native shell work
+
+Do not let native ambitions derail the near-term goal of proving the document-first web loop.
 
 ## Runtime Guardrails
 

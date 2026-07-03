@@ -46,6 +46,10 @@ Keep the shared task board for cross-project coordination and repo-level priorit
 
 ### Ready
 
+#### WS-0005 Refactor toward shared core and multiple shells
+- **Goal:** Separate Workshop's durable document/proposal/revision logic from the current web/Node shell so a future native shell can reuse the product core.
+- **Notes:** Follow `docs/shared-core-multi-shell-refactor-plan.md`. Keep the refactor incremental and in service of the near-term web agent loop, not as an architecture detour.
+
 #### WS-0002 Implement the first concrete agent actions
 - **Goal:** Add the narrow set of section-aware or document-aware agent actions that make the v1 loop genuinely useful.
 - **Notes:** Keep the action set small and opinionated. Do not drift into a generic agent shell.
