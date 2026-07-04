@@ -9,6 +9,7 @@ import type {
   ProposalMutationResult,
   ProposalSetRecord,
   ProposalSetStatus,
+  Section,
   RevisionRecord
 } from '../core/types.js';
 import {
@@ -162,24 +163,7 @@ async function buildProposalMutationResult(
   };
 }
 
-async function applyReplaceSectionProposal(relativePath: string, proposalItem: ProposalItemRecord): Promise<string> {
-  if (proposalItem.kind !== 'replace_section' || !proposalItem.sectionId) {
-    throw new Error('invalid_request');
-  }
-
-  const { absolutePath } = await documentService.resolveArtifactPath(relativePath);
-  const markdown = await fs.readFile(absolutePath, 'utf8');
-  const sections = parseMarkdownSections(markdown);
-  const targetSection = sections.find((section) => section.id === proposalItem.sectionId);
-
-  if (!targetSection) {
-    throw new Error('proposal_conflict');
-  }
-
-  if (targetSection.markdown.trim() !== proposalItem.beforeMarkdown.trim()) {
-    throw new Error('proposal_conflict');
-  }
-
+function replaceSectionMarkdown(markdown: string, targetSection: Section, afterMarkdown: string): string {
   const lines = markdown.split('\n');
   const originalLines = lines.slice(targetSection.startLine - 1, targetSection.endLine);
   let trailingBlankCount = 0;
@@ -192,17 +176,58 @@ async function applyReplaceSectionProposal(relativePath: string, proposalItem: P
     trailingBlankCount += 1;
   }
 
-  const replacementLines = proposalItem.afterMarkdown.trim().split('\n');
+  const replacementLines = afterMarkdown.trim().split('\n');
 
   if (trailingBlankCount > 0) {
     replacementLines.push(...Array.from({ length: trailingBlankCount }, () => ''));
   }
 
   lines.splice(targetSection.startLine - 1, targetSection.endLine - targetSection.startLine + 1, ...replacementLines);
+  return lines.join('\n');
+}
 
-  const nextMarkdown = lines.join('\n');
-  await fs.writeFile(absolutePath, nextMarkdown);
-  return nextMarkdown;
+function applyReplaceSectionProposalToMarkdown(markdown: string, proposalItem: ProposalItemRecord): string {
+  if (proposalItem.kind !== 'replace_section' || !proposalItem.sectionId) {
+    throw new Error('invalid_request');
+  }
+
+  const sections = parseMarkdownSections(markdown);
+  const targetSection = sections.find((section) => section.id === proposalItem.sectionId);
+
+  if (!targetSection) {
+    throw new Error('proposal_conflict');
+  }
+
+  if (targetSection.markdown.trim() !== proposalItem.beforeMarkdown.trim()) {
+    throw new Error('proposal_conflict');
+  }
+
+  return replaceSectionMarkdown(markdown, targetSection, proposalItem.afterMarkdown);
+}
+
+async function writeDocumentAndStoreSafely(
+  absolutePath: string,
+  originalMarkdown: string,
+  nextMarkdown: string,
+  store: Store
+): Promise<void> {
+  let documentWritten = false;
+
+  try {
+    await fs.writeFile(absolutePath, nextMarkdown);
+    documentWritten = true;
+    await artifactStore.writeStore(store);
+  } catch (error) {
+    if (documentWritten) {
+      try {
+        await fs.writeFile(absolutePath, originalMarkdown);
+      } catch {
+        throw new Error('document_write_failed');
+      }
+    }
+
+    throw error;
+  }
 }
 
 function updateProposalItemStatus(
@@ -236,6 +261,22 @@ function renderSectionTargetLabel(markdown: string, fallback: string): string {
   return headingMatch?.[2]?.trim() || fallback;
 }
 
+function resolveMessageSectionId(
+  messageSectionId: string | null,
+  artifact: Artifact,
+  proposalTargetSectionId: string | null
+): string | null {
+  if (messageSectionId && artifact.sections.some((section) => section.id === messageSectionId)) {
+    return messageSectionId;
+  }
+
+  if (proposalTargetSectionId && artifact.sections.some((section) => section.id === proposalTargetSectionId)) {
+    return proposalTargetSectionId;
+  }
+
+  return null;
+}
+
 function toErrorMessage(error: unknown): string {
   if (!(error instanceof Error)) {
     return 'Request failed.';
@@ -248,6 +289,8 @@ function toErrorMessage(error: unknown): string {
       return 'That proposal no longer matches the current document. Refresh and try again.';
     case 'invalid_request':
       return 'That action is no longer available.';
+    case 'document_write_failed':
+      return 'Workshop could not safely apply that proposal. The document was restored.';
     default:
       return error.message || 'Request failed.';
   }
@@ -482,12 +525,13 @@ app.post('/api/agent/turn', async (request: Request, response: Response) => {
     });
 
     const agentCreatedAt = new Date().toISOString();
-    const messages = turnResult.messages.map((messageBody) => ({
+    const proposalTargetSectionId = turnResult.proposal?.targetSectionId ?? null;
+    const messages = turnResult.messages.map((message) => ({
       id: createId('turn_agent'),
       authorType: 'agent' as const,
-      body: messageBody.trim(),
+      body: message.body.trim(),
       createdAt: agentCreatedAt,
-      focusedSectionId: focusedSection?.id ?? null
+      sectionId: resolveMessageSectionId(message.sectionId, artifact, proposalTargetSectionId)
     })).filter((message) => message.body);
 
     for (const message of messages) {
@@ -496,7 +540,7 @@ app.post('/api/agent/turn', async (request: Request, response: Response) => {
         authorType: 'agent',
         body: message.body,
         createdAt: message.createdAt,
-        sectionId: message.focusedSectionId
+        sectionId: message.sectionId
       });
     }
 
@@ -516,7 +560,7 @@ app.post('/api/agent/turn', async (request: Request, response: Response) => {
           summary: turnResult.proposal.summary.trim() || `Update ${targetSection.headingText}`,
           rationale: turnResult.proposal.rationale.trim(),
           scope: 'section',
-          focusedSectionId: focusedSection?.id ?? null,
+          focusedSectionId: targetSection.id,
           createdAt: agentCreatedAt,
           items: [
             {
@@ -563,7 +607,7 @@ app.post('/api/agent/turn', async (request: Request, response: Response) => {
 app.post('/api/proposals/:proposalSetId/items/:proposalItemId/accept', async (request: Request, response: Response) => {
   try {
     const artifactPath = String(request.body?.path ?? '');
-    const { relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const { absolutePath, relativePath } = await documentService.resolveArtifactPath(artifactPath);
     const currentStore = await artifactStore.readStore();
     const proposalSet = getActiveProposalSet(currentStore, relativePath);
 
@@ -577,7 +621,8 @@ app.post('/api/proposals/:proposalSetId/items/:proposalItemId/accept', async (re
       throw new Error('invalid_request');
     }
 
-    const markdown = await applyReplaceSectionProposal(relativePath, proposalItem);
+    const originalMarkdown = await fs.readFile(absolutePath, 'utf8');
+    const markdown = applyReplaceSectionProposalToMarkdown(originalMarkdown, proposalItem);
     updateProposalItemStatus(proposalSet, proposalItem.id, 'applied');
 
     const revision: RevisionRecord = {
@@ -591,7 +636,7 @@ app.post('/api/proposals/:proposalSetId/items/:proposalItemId/accept', async (re
     };
 
     appendRevision(currentStore, relativePath, revision);
-    await artifactStore.writeStore(currentStore);
+    await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, markdown, currentStore);
 
     response.json(await buildProposalMutationResult(relativePath, revision));
   } catch (error) {
@@ -626,7 +671,7 @@ app.post('/api/proposals/:proposalSetId/items/:proposalItemId/dismiss', async (r
 app.post('/api/proposals/:proposalSetId/accept-all', async (request: Request, response: Response) => {
   try {
     const artifactPath = String(request.body?.path ?? '');
-    const { relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const { absolutePath, relativePath } = await documentService.resolveArtifactPath(artifactPath);
     const currentStore = await artifactStore.readStore();
     const proposalSet = getActiveProposalSet(currentStore, relativePath);
 
@@ -640,10 +685,11 @@ app.post('/api/proposals/:proposalSetId/accept-all', async (request: Request, re
       throw new Error('invalid_request');
     }
 
-    let latestMarkdown = '';
+    const originalMarkdown = await fs.readFile(absolutePath, 'utf8');
+    let latestMarkdown = originalMarkdown;
 
     for (const proposalItem of pendingItems) {
-      latestMarkdown = await applyReplaceSectionProposal(relativePath, proposalItem);
+      latestMarkdown = applyReplaceSectionProposalToMarkdown(latestMarkdown, proposalItem);
       updateProposalItemStatus(proposalSet, proposalItem.id, 'applied');
     }
 
@@ -658,7 +704,7 @@ app.post('/api/proposals/:proposalSetId/accept-all', async (request: Request, re
     };
 
     appendRevision(currentStore, relativePath, revision);
-    await artifactStore.writeStore(currentStore);
+    await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, latestMarkdown, currentStore);
 
     response.json(await buildProposalMutationResult(relativePath, revision));
   } catch (error) {

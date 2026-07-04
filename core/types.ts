@@ -113,7 +113,7 @@ export type AgentTurnMessage = {
   authorType: 'agent';
   body: string;
   createdAt: string;
-  focusedSectionId: string | null;
+  sectionId: string | null;
 };
 
 export type AgentTurnResponse = {

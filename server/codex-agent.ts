@@ -35,7 +35,10 @@ export type DocumentAgentTurnInput = {
 };
 
 type RawAgentTurnResult = {
-  messages: string[];
+  messages: Array<{
+    body: string;
+    sectionId: string | null;
+  }>;
   proposal: null | {
     summary: string;
     rationale: string;
@@ -157,6 +160,9 @@ Return valid JSON matching the provided schema.
 
 Rules:
 - Always return at least one short agent discussion message in messages.
+- Each message must include body and sectionId.
+- sectionId must be one of the provided section ids when the message is clearly about exactly one section.
+- Otherwise sectionId must be null.
 - The full document is in context.
 - The focused section is only a hint, not a hard boundary.
 - Only create a proposal when you can honestly express it as one replace_section proposal against exactly one existing section id.
@@ -195,7 +201,20 @@ async function runCodexExec(rootDir: string, prompt: string): Promise<RawAgentTu
       messages: {
         type: 'array',
         items: {
-          type: 'string'
+          type: 'object',
+          properties: {
+            body: {
+              type: 'string'
+            },
+            sectionId: {
+              anyOf: [
+                { type: 'string' },
+                { type: 'null' }
+              ]
+            }
+          },
+          required: ['body', 'sectionId'],
+          additionalProperties: false
         },
         minItems: 1
       },
