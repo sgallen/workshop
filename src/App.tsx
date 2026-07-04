@@ -2,7 +2,7 @@ import { FormEvent, KeyboardEvent, MouseEvent, PointerEvent, useEffect, useMemo,
 import { marked } from 'marked';
 import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
 import type { Artifact, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
-import { formatArtifactTimestamp, formatRecentActivity } from './lib/formatting';
+import { formatRecentActivity } from './lib/formatting';
 import { readJsonResponse } from './lib/read-json-response';
 import {
   renderDrawerAgentActionLabel,
@@ -137,9 +137,8 @@ export function App() {
   const attachedSection = attachedSectionId ? sectionById.get(attachedSectionId) ?? null : null;
   const conversationComments = artifact?.comments ?? [];
   const resolvedArtifactPath = artifact?.relativePath ?? artifactPath;
-  const showOverlay = menuOpen || railOpen;
+  const showOverlay = menuOpen;
   const interactiveOverlay = menuOpen;
-  const showComposerUtilityRow = Boolean(attachedSection || hasRemoteUpdate);
   const displayedRecentArtifacts = useMemo(() => {
     return buildDisplayedRecents(artifact, recentArtifacts, conversationComments.length, DEMO_RECENT_CANDIDATES);
   }, [artifact, recentArtifacts, conversationComments.length]);
@@ -157,13 +156,37 @@ export function App() {
   const activeProposalFocusSection = activeProposalSet?.focusedSectionId
     ? sectionById.get(activeProposalSet.focusedSectionId) ?? null
     : null;
-  const pendingTurnMessage = attachedSection
-    ? `Codex is reviewing ${attachedSection.headingText}…`
-    : 'Codex is reviewing the document…';
+  const activeProposalAnchorCommentId = useMemo(() => {
+    if (!activeProposalSet) {
+      return null;
+    }
+
+    let anchorCommentId: string | null = null;
+
+    for (const comment of conversationComments) {
+      if (comment.authorType === 'agent' && comment.createdAt === activeProposalSet.createdAt) {
+        anchorCommentId = comment.id;
+      }
+    }
+
+    return anchorCommentId;
+  }, [activeProposalSet, conversationComments]);
+  const pendingTurnMessage = activeProposalSet
+    ? attachedSection
+      ? `Working on a revision for ${attachedSection.headingText}…`
+      : 'Working on a revision…'
+    : attachedSection
+      ? `Reviewing ${attachedSection.headingText}…`
+      : 'Reviewing the document…';
   const hasStalePendingProposals = hasRemoteUpdate && pendingProposalItems.length > 0;
   const reviewStateLabel = activeProposalSet
     ? `In review: ${pendingProposalCount} pending ${pendingProposalCount === 1 ? 'change' : 'changes'}`
     : null;
+  const composerPlaceholder = attachedSection
+    ? `Message about ${attachedSection.headingText}...`
+    : activeProposalSet
+      ? 'Reply to refine the pending change...'
+      : 'Reply about the document...';
 
   useEffect(() => {
     void loadArtifact(artifactPath);
@@ -252,6 +275,10 @@ export function App() {
       document.removeEventListener('visibilitychange', refreshOnAttention);
     };
   }, [artifact, resolvedArtifactPath, lastLoadedUpdatedAt]);
+
+  useEffect(() => {
+    setProposalCompareModeById({});
+  }, [artifact?.relativePath, artifact?.updatedAt, activeProposalSet?.id, activeProposalSet?.createdAt]);
 
   useEffect(() => {
     setProposalCompareModeById((current) => {
@@ -395,7 +422,9 @@ export function App() {
     }
   }
 
-  async function loadArtifact(nextPath: string) {
+  async function loadArtifact(nextPath: string, options?: { preserveCurrentOnError?: boolean }) {
+    const preserveCurrentOnError = options?.preserveCurrentOnError ?? false;
+
     setLoading(true);
     setError(null);
 
@@ -410,8 +439,13 @@ export function App() {
       applyArtifactPayload(payload);
       void loadRecents();
     } catch (caughtError) {
-      setArtifact(null);
-      setActiveProposalSet(null);
+      if (!preserveCurrentOnError) {
+        setArtifact(null);
+        setActiveProposalSet(null);
+        setLastLoadedUpdatedAt(null);
+        setHasRemoteUpdate(false);
+        setAttachedSectionId(null);
+      }
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load document.');
     } finally {
       setLoading(false);
@@ -486,10 +520,16 @@ export function App() {
     setRailOpen(false);
 
     if (normalizedPath === artifactPath) {
-      void loadArtifact(normalizedPath);
+      void loadArtifact(normalizedPath, { preserveCurrentOnError: true });
       return;
     }
 
+    setArtifact(null);
+    setActiveProposalSet(null);
+    setLastLoadedUpdatedAt(null);
+    setHasRemoteUpdate(false);
+    setAttachedSectionId(null);
+    setComposerBody('');
     setArtifactPath(normalizedPath);
   }
 
@@ -557,7 +597,7 @@ export function App() {
   }
 
   async function handleReloadDocument() {
-    await loadArtifact(resolvedArtifactPath);
+    await loadArtifact(resolvedArtifactPath, { preserveCurrentOnError: true });
   }
 
   async function handleConnectAgent() {
@@ -652,6 +692,10 @@ export function App() {
     });
   }
 
+  function handleOpenProposalInDocument() {
+    handleFocusProposalSection(activeProposalSet?.focusedSectionId ?? pendingProposalItems[0]?.sectionId ?? null);
+  }
+
   function handleThreadSummaryKeyDown(event: KeyboardEvent<HTMLElement>, sectionId: string | null) {
     if (event.key !== 'Enter' && event.key !== ' ') {
       return;
@@ -698,6 +742,87 @@ export function App() {
     }
 
     setRailOpen(false);
+  }
+
+  function renderThreadSummaryCard(options?: { attached?: boolean }) {
+    if (!activeProposalSet) {
+      return null;
+    }
+
+    const attached = options?.attached ?? false;
+    const targetSectionId = activeProposalSet.focusedSectionId ?? pendingProposalItems[0]?.sectionId ?? null;
+
+    return (
+      <div className={attached ? 'thread-summary-attachment-wrap' : 'comment-row thread-summary-row'} data-author="agent">
+        <div
+          className={attached ? 'thread-summary-attachment' : 'thread-summary-card'}
+          data-stale={hasStalePendingProposals ? 'true' : 'false'}
+          role={attached ? undefined : 'button'}
+          tabIndex={attached ? undefined : 0}
+          onClick={attached ? undefined : () => handleFocusProposalSection(targetSectionId)}
+          onKeyDown={attached ? undefined : (event) => handleThreadSummaryKeyDown(event, targetSectionId)}
+        >
+          {!attached ? (
+            <div className="thread-summary-top">
+              <div className="thread-summary-meta">
+                {targetSectionId ? (
+                  <button className="text-button text-button-muted thread-summary-link" type="button" onClick={handleOpenProposalInDocument}>
+                    Jump to change
+                  </button>
+                ) : null}
+              </div>
+              <span className="meta-pill meta-pill-warning proposal-inline-pill">
+                {pendingProposalCount} pending {pendingProposalCount === 1 ? 'change' : 'changes'}
+              </span>
+            </div>
+          ) : null}
+          {!attached ? <p className="thread-summary-body">{activeProposalSet.summary}</p> : null}
+          {!attached && activeProposalFocusSection ? (
+            <p className="comment-context thread-summary-context">{activeProposalFocusSection.headingText}</p>
+          ) : null}
+          <div className="proposal-actions proposal-actions-inline proposal-actions-inline-document thread-summary-actions">
+            <button
+              className="secondary-button compact-button proposal-review-button"
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`);
+              }}
+            >
+              Reject
+            </button>
+            <button
+              className="primary-button compact-button proposal-review-button"
+              type="button"
+              disabled={hasStalePendingProposals}
+              title={hasStalePendingProposals ? 'Reload the document before accepting these changes.' : undefined}
+              onClick={(event) => {
+                event.stopPropagation();
+                void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/accept-all`);
+              }}
+            >
+              Accept
+            </button>
+          </div>
+          {hasStalePendingProposals ? (
+            <div className="proposal-inline-status" role="status" aria-live="polite">
+              <span className="status-pill status-pill-warning">Reload required</span>
+              <span className="context-subtle">Reload before accepting these changes.</span>
+              <button
+                className="text-button"
+                type="button"
+                onClick={(event) => {
+                  event.stopPropagation();
+                  void handleReloadDocument();
+                }}
+              >
+                Reload
+              </button>
+            </div>
+          ) : null}
+        </div>
+      </div>
+    );
   }
 
   const showAgentConnectCard =
@@ -874,7 +999,7 @@ export function App() {
 
         {error ? <p className="error-banner">{error}</p> : null}
 
-        {loading ? (
+        {loading && !artifact ? (
           <section className="artifact-card">
             <p className="artifact-kicker">Loading document</p>
             <h2>Fetching the latest document and discussion...</h2>
@@ -972,11 +1097,8 @@ export function App() {
                             dangerouslySetInnerHTML={{ __html: section.renderedHtml }}
                           />
                         ) : (
-                          <div className="proposal-inline-block">
+                          <div className="proposal-inline-block" data-stale={hasStalePendingProposals ? 'true' : 'false'}>
                             <div className="proposal-inline-topbar">
-                              <div className="proposal-inline-meta">
-                                <span className="meta-pill meta-pill-warning proposal-inline-pill">Pending</span>
-                              </div>
                               <div className="proposal-compare-toggle" aria-label="Compare proposal versions">
                                 <button
                                   className={`proposal-toggle-button${proposalCompareMode === 'original' ? ' proposal-toggle-button-active' : ''}`}
@@ -1012,15 +1134,19 @@ export function App() {
                                 className="primary-button compact-button proposal-review-button"
                                 type="button"
                                 disabled={hasStalePendingProposals}
+                                title={hasStalePendingProposals ? 'Reload the document before accepting this proposal.' : undefined}
                                 onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/accept`)}
                               >
                                 Accept
                               </button>
                             </div>
                             {hasStalePendingProposals ? (
-                              <div className="proposal-inline-status">
+                              <div className="proposal-inline-status" role="status" aria-live="polite">
                                 <span className="status-pill status-pill-warning">Reload required</span>
                                 <span className="context-subtle">Reload the document before accepting this proposal.</span>
+                                <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
+                                  Reload
+                                </button>
                               </div>
                             ) : null}
                           </div>
@@ -1062,70 +1188,37 @@ export function App() {
                       <div className="thread-list">
                         {conversationComments.map((comment) => {
                           const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
+                          const isActiveProposalAnchor = activeProposalAnchorCommentId === comment.id;
 
                           return (
-                            <div className="comment-row" key={comment.id} data-author={comment.authorType}>
-                              <div className="comment-thread" data-author={comment.authorType}>
-                                {commentSection ? <p className="comment-context">{commentSection.headingText}</p> : null}
-                                <p>{comment.body}</p>
-                                <p className="comment-timestamp">{formatArtifactTimestamp(comment.createdAt)}</p>
+                            <div key={comment.id}>
+                              <div className="comment-row" data-author={comment.authorType}>
+                                <div
+                                  className={`comment-thread${isActiveProposalAnchor ? ' comment-thread-active-proposal' : ''}`}
+                                  data-author={comment.authorType}
+                                  data-active-proposal={isActiveProposalAnchor ? 'true' : 'false'}
+                                >
+                                  {commentSection || isActiveProposalAnchor ? (
+                                    <div className="comment-thread-header">
+                                      {commentSection ? <p className="comment-context comment-context-tight">{commentSection.headingText}</p> : <span />}
+                                      {isActiveProposalAnchor ? (
+                                        <button className="text-button text-button-muted comment-jump-link" type="button" onClick={handleOpenProposalInDocument}>
+                                          Jump to change
+                                        </button>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
+                                  <p>{comment.body}</p>
+                                  {isActiveProposalAnchor ? renderThreadSummaryCard({ attached: true }) : null}
+                                </div>
                               </div>
                             </div>
                           );
                         })}
-                        {activeProposalSet ? (
-                          <div className="comment-row thread-summary-row" data-author="agent">
-                            <div
-                              className="thread-summary-card"
-                              role="button"
-                              tabIndex={0}
-                              onClick={() => handleFocusProposalSection(activeProposalSet.focusedSectionId ?? pendingProposalItems[0]?.sectionId ?? null)}
-                              onKeyDown={(event) =>
-                                handleThreadSummaryKeyDown(event, activeProposalSet.focusedSectionId ?? pendingProposalItems[0]?.sectionId ?? null)
-                              }
-                            >
-                              <div className="thread-summary-top">
-                                <div className="thread-summary-meta">
-                                  <span className="thread-summary-link">Jump to change</span>
-                                </div>
-                                <span className="meta-pill meta-pill-warning proposal-inline-pill">
-                                  {pendingProposalCount} pending {pendingProposalCount === 1 ? 'change' : 'changes'}
-                                </span>
-                              </div>
-                              <p className="thread-summary-body">{activeProposalSet.summary}</p>
-                              {activeProposalFocusSection ? (
-                                <p className="comment-context thread-summary-context">{activeProposalFocusSection.headingText}</p>
-                              ) : null}
-                              <div className="proposal-actions proposal-actions-inline proposal-actions-inline-document thread-summary-actions">
-                                <button
-                                  className="secondary-button compact-button proposal-review-button"
-                                  type="button"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`);
-                                  }}
-                                >
-                                  Reject all
-                                </button>
-                                <button
-                                  className="primary-button compact-button proposal-review-button"
-                                  type="button"
-                                  disabled={hasStalePendingProposals}
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/accept-all`);
-                                  }}
-                                >
-                                  Accept all
-                                </button>
-                              </div>
-                            </div>
-                          </div>
-                        ) : null}
+                        {activeProposalSet && !activeProposalAnchorCommentId ? renderThreadSummaryCard() : null}
                         {agentTurnPending ? (
                           <div className="comment-row" data-author="agent">
                             <div className="comment-thread" data-author="agent">
-                              <p className="comment-author">Codex</p>
                               <p>{pendingTurnMessage}</p>
                             </div>
                           </div>
@@ -1146,27 +1239,8 @@ export function App() {
                     onSubmit={(event) => void handleComposerSubmit(event)}
                     ref={composerFrameRef}
                   >
-                    {showComposerUtilityRow ? (
-                      <div className="composer-utility-row">
-                        {attachedSection ? (
-                          <div className="composer-context composer-context-tight">
-                            <span className="context-chip">{attachedSection.headingText}</span>
-                            <button className="text-button" type="button" onClick={() => attachSection(null)}>
-                              Clear
-                            </button>
-                          </div>
-                        ) : null}
-                        {hasRemoteUpdate ? (
-                          <div className="discussion-actions discussion-actions-compact">
-                            <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
-                              Reload
-                            </button>
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
                     {hasRemoteUpdate ? (
-                      <div className="discussion-status-inline">
+                      <div className="discussion-status-inline" role="status" aria-live="polite">
                         <span className={`status-pill${hasStalePendingProposals ? ' status-pill-warning' : ''}`}>
                           {hasStalePendingProposals ? 'Reload required' : 'Updated'}
                         </span>
@@ -1181,7 +1255,7 @@ export function App() {
                       </div>
                     ) : null}
                     {agentTurnPending ? (
-                      <div className="discussion-status-inline">
+                      <div className="discussion-status-inline" role="status" aria-live="polite">
                         <span className="status-pill status-pill-info">Agent is thinking</span>
                         <span className="context-subtle">{pendingTurnMessage}</span>
                       </div>
@@ -1197,7 +1271,7 @@ export function App() {
                         onFocus={handleComposerFocus}
                         onBlur={handleComposerBlur}
                         disabled={submitting}
-                        placeholder={attachedSection ? `Message about ${attachedSection.headingText}...` : 'Reply about the document...'}
+                        placeholder={composerPlaceholder}
                       />
                       <button className="primary-button composer-submit" type="submit" disabled={submitting}>
                         {submitting ? '...' : '➤'}

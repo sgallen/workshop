@@ -62,6 +62,10 @@ Keep the shared task board for cross-project coordination and repo-level priorit
 - **Goal:** Document the smallest durable contract for how an agent opens a document in Workshop without exposing local path complexity.
 - **Notes:** This is primarily about the hosted-local handoff shape for now, but should avoid assumptions that would prevent a future device-local runtime from using the same product model.
 
+#### WS-0006 Expand the proposal model beyond single-section replacement
+- **Goal:** Grow from the current narrow review loop into a document-level draft-evolution model that supports both blank-document creation and richer existing-document refinement.
+- **Notes:** Follow `docs/draft-evolution-north-star.md` after the v1 loop is stable. Likely capabilities include whole-document first-draft proposals, insert-new-section proposals, multi-item proposal sets, and structural proposal kinds such as split, merge, reorder, or remove.
+
 ### Blocked
 - None.
 

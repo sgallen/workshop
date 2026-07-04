@@ -144,12 +144,24 @@ function buildDocumentTurnPrompt(input: DocumentAgentTurnInput): string {
       ].join('\n')
     : 'Focused section: none';
 
+  const activeProposalItem = input.activeProposalSet?.items.find((item) => item.status === 'pending') ?? null;
   const activeProposalBlock = input.activeProposalSet
     ? [
         'There is already one active pending proposal set.',
-        `Summary: ${input.activeProposalSet.summary}`,
-        `Focused section id: ${input.activeProposalSet.focusedSectionId ?? 'none'}`,
-        'Unless the user is clearly asking to replace that proposal, respond with discussion only and set proposal to null.'
+        'By default, treat the next user prompt as a refinement of that pending proposal, not as a separate proposal round.',
+        'If you return a new proposal, it replaces the current pending proposal instead of stacking on top of it.',
+        'Only return discussion with proposal = null when the user is clearly discussing, asking a question, or not yet asking for a revised draft.',
+        `Current proposal summary: ${input.activeProposalSet.summary}`,
+        `Current proposal focused section id: ${input.activeProposalSet.focusedSectionId ?? 'none'}`,
+        activeProposalItem ? `Current proposal target section id: ${activeProposalItem.sectionId ?? 'none'}` : 'Current proposal target section id: none',
+        activeProposalItem
+          ? [
+              '<current_pending_proposal_markdown>',
+              activeProposalItem.afterMarkdown,
+              '</current_pending_proposal_markdown>'
+            ].join('\n')
+          : 'There is no pending proposal item markdown.',
+        'Any refined proposal must still be written against the canonical document provided below, not against an imagined layered draft.'
       ].join('\n')
     : 'There is no active proposal set.';
 
@@ -167,6 +179,7 @@ Rules:
 - The focused section is only a hint, not a hard boundary.
 - Only create a proposal when you can honestly express it as one replace_section proposal against exactly one existing section id.
 - If the request is mainly critique, clarification, or a broader rewrite than one section, return discussion only and set proposal to null.
+- If there is already an active pending proposal set and the user is pushing on the wording or direction, prefer returning a refined replacement proposal.
 - If you create a proposal, afterMarkdown must be complete Markdown for the replacement section, including the heading line.
 - If the user is focused on a section and asks for a rewrite there, prefer that section id.
 - Never invent section ids. Use one of the provided ids exactly.

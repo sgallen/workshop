@@ -26,6 +26,26 @@ The enduring abstraction is:
 - may produce discussion, questions, and/or one proposal set
 - accepted proposals become revisions
 
+## v1 Boundaries
+
+This blueprint is the contract for the current implementation slice, not the final shape of Workshop.
+
+For v1, keep these constraints explicit:
+
+- there is at most one active pending proposal set per document
+- follow-up discussion refines that active pending proposal set in place rather than creating stacked proposal history
+- the current implemented concrete proposal path is intentionally narrow and effectively single-section
+- section selection is a practical focus and review aid for this slice, not the long-term conceptual boundary of the product
+
+This matters because the longer-term model is broader than section replacement.
+Workshop is heading toward document-level draft evolution, where a proposal may eventually:
+
+- produce a first draft for a blank or near-blank document
+- revise an existing document across one or many sections
+- add, remove, split, merge, or reorder sections
+
+So if v1 chooses stricter interaction rules around section focus during review, treat them as temporary implementation constraints that protect clarity, not as the enduring product abstraction.
+
 ## Product Rules
 
 These rules should remain stable even as models improve.

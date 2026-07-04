@@ -127,6 +127,84 @@ function saveProposalSet(store: Store, relativePath: string, proposalSet: Propos
   proposalSets.push(proposalSet);
 }
 
+function buildPendingReplaceSectionItem(
+  proposalSetId: string,
+  targetSection: Section,
+  summary: string,
+  afterMarkdown: string,
+  createdAt: string
+): ProposalItemRecord {
+  return {
+    id: createId('pi'),
+    proposalSetId,
+    kind: 'replace_section',
+    status: 'pending',
+    sectionId: targetSection.id,
+    targetLabel: renderSectionTargetLabel(targetSection.markdown, targetSection.headingText),
+    beforeMarkdown: targetSection.markdown,
+    afterMarkdown,
+    summary,
+    createdAt
+  };
+}
+
+function upsertActiveProposalSet(
+  store: Store,
+  relativePath: string,
+  artifact: Artifact,
+  humanTurnId: string,
+  agentCreatedAt: string,
+  proposal: {
+    summary: string;
+    rationale: string;
+    targetSectionId: string;
+    afterMarkdown: string;
+  }
+): ProposalSetRecord | null {
+  const targetSection = artifact.sections.find((section) => section.id === proposal.targetSectionId);
+  const afterMarkdown = proposal.afterMarkdown.trim();
+
+  if (!targetSection || !afterMarkdown) {
+    return null;
+  }
+
+  const summary = proposal.summary.trim() || `Update ${targetSection.headingText}`;
+  const existingActiveProposal = getActiveProposalSet(store, relativePath);
+
+  if (existingActiveProposal) {
+    existingActiveProposal.conversationTurnId = humanTurnId;
+    existingActiveProposal.status = 'pending';
+    existingActiveProposal.summary = summary;
+    existingActiveProposal.rationale = proposal.rationale.trim();
+    existingActiveProposal.scope = 'section';
+    existingActiveProposal.focusedSectionId = targetSection.id;
+    existingActiveProposal.createdAt = agentCreatedAt;
+    existingActiveProposal.items = [
+      buildPendingReplaceSectionItem(existingActiveProposal.id, targetSection, summary, afterMarkdown, agentCreatedAt)
+    ];
+    return existingActiveProposal;
+  }
+
+  const proposalSetId = createId('ps');
+  const proposalSet: ProposalSetRecord = {
+    id: proposalSetId,
+    documentId: artifact.relativePath,
+    conversationTurnId: humanTurnId,
+    status: 'pending',
+    summary,
+    rationale: proposal.rationale.trim(),
+    scope: 'section',
+    focusedSectionId: targetSection.id,
+    createdAt: agentCreatedAt,
+    items: [
+      buildPendingReplaceSectionItem(proposalSetId, targetSection, summary, afterMarkdown, agentCreatedAt)
+    ]
+  };
+
+  saveProposalSet(store, relativePath, proposalSet);
+  return proposalSet;
+}
+
 function appendRevision(store: Store, relativePath: string, revision: RevisionRecord): void {
   artifactStore.getRevisions(store, relativePath).push(revision);
 }
@@ -544,42 +622,15 @@ app.post('/api/agent/turn', async (request: Request, response: Response) => {
       });
     }
 
-    let proposalSet: ProposalSetRecord | null = null;
-
     if (turnResult.proposal) {
-      const targetSection = artifact.sections.find((section) => section.id === turnResult.proposal?.targetSectionId);
-      const afterMarkdown = turnResult.proposal.afterMarkdown.trim();
-
-      if (targetSection && afterMarkdown) {
-        const proposalSetId = createId('ps');
-        proposalSet = {
-          id: proposalSetId,
-          documentId: artifact.relativePath,
-          conversationTurnId: humanTurnId,
-          status: 'pending',
-          summary: turnResult.proposal.summary.trim() || `Update ${targetSection.headingText}`,
-          rationale: turnResult.proposal.rationale.trim(),
-          scope: 'section',
-          focusedSectionId: targetSection.id,
-          createdAt: agentCreatedAt,
-          items: [
-            {
-              id: createId('pi'),
-              proposalSetId,
-              kind: 'replace_section',
-              status: 'pending',
-              sectionId: targetSection.id,
-              targetLabel: renderSectionTargetLabel(targetSection.markdown, targetSection.headingText),
-              beforeMarkdown: targetSection.markdown,
-              afterMarkdown,
-              summary: turnResult.proposal.summary.trim() || `Update ${targetSection.headingText}`,
-              createdAt: agentCreatedAt
-            }
-          ]
-        };
-
-        saveProposalSet(currentStore, artifact.relativePath, proposalSet);
-      }
+      upsertActiveProposalSet(
+        currentStore,
+        artifact.relativePath,
+        artifact,
+        humanTurnId,
+        agentCreatedAt,
+        turnResult.proposal
+      );
     }
 
     artifactStore.recordRecentDiscussion(currentStore, {
