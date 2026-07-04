@@ -80,7 +80,6 @@ export function App() {
   const [menuOpen, setMenuOpen] = useState(false);
   const [railOpen, setRailOpen] = useState(false);
   const [attachedSectionId, setAttachedSectionId] = useState<string | null>(null);
-  const [manuallyRefreshing, setManuallyRefreshing] = useState(false);
   const [hasRemoteUpdate, setHasRemoteUpdate] = useState(false);
   const [lastLoadedUpdatedAt, setLastLoadedUpdatedAt] = useState<string | null>(null);
   const [agentAuth, setAgentAuth] = useState<AgentAuthStatus | null>(null);
@@ -156,6 +155,9 @@ export function App() {
     );
   }, [pendingProposalItems]);
   const latestRevision = revisions[0] ?? null;
+  const activeProposalFocusSection = activeProposalSet?.focusedSectionId
+    ? sectionById.get(activeProposalSet.focusedSectionId) ?? null
+    : null;
 
   useEffect(() => {
     void loadArtifact(artifactPath);
@@ -408,13 +410,9 @@ export function App() {
     }
   }
 
-  async function checkForRemoteUpdate(showButtonFeedback = false) {
+  async function checkForRemoteUpdate() {
     if (!resolvedArtifactPath || !lastLoadedUpdatedAt) {
       return;
-    }
-
-    if (showButtonFeedback) {
-      setManuallyRefreshing(true);
     }
 
     try {
@@ -428,10 +426,6 @@ export function App() {
       setHasRemoteUpdate(payload.updatedAt !== lastLoadedUpdatedAt);
     } catch {
       setHasRemoteUpdate(false);
-    } finally {
-      if (showButtonFeedback) {
-        setManuallyRefreshing(false);
-      }
     }
   }
 
@@ -905,9 +899,16 @@ export function App() {
                         {proposalItem ? (
                           <div className="proposal-card">
                             <div className="proposal-card-header">
-                              <div>
+                              <div className="proposal-card-copy">
                                 <p className="proposal-kicker">Proposed change</p>
                                 <p className="proposal-summary">{proposalItem.summary}</p>
+                                {proposalItem.sectionId ? (
+                                  <div className="proposal-meta-row">
+                                    <span className="meta-pill meta-pill-muted proposal-meta-pill">
+                                      {sectionById.get(proposalItem.sectionId)?.headingText ?? 'Selected section'}
+                                    </span>
+                                  </div>
+                                ) : null}
                               </div>
                               <div className="proposal-actions proposal-actions-inline">
                                 <button
@@ -933,7 +934,9 @@ export function App() {
                                 </button>
                               </div>
                             </div>
-                            <p className="context-subtle proposal-rationale">{activeProposalSet?.rationale}</p>
+                            {activeProposalSet?.rationale ? (
+                              <p className="context-subtle proposal-rationale">{activeProposalSet.rationale}</p>
+                            ) : null}
                             <div className="proposal-rendered" dangerouslySetInnerHTML={{ __html: proposalHtml ?? '' }} />
                           </div>
                         ) : null}
@@ -951,39 +954,40 @@ export function App() {
               >
                 <div className="discussion-rail-panel">
                   <div className="discussion-rail-header">
-                    <span
-                      className={`discussion-rail-status${agentAuth?.state === 'connected' ? ' discussion-rail-status-connected' : ' discussion-rail-status-disconnected'}`}
-                    >
-                      {renderRailAgentHint(agentAuth, agentAuthLoading)}
-                    </span>
-                    <div className="discussion-header-actions">
-                      <button
-                        className="secondary-button compact-button discussion-header-button"
-                        type="button"
-                        onClick={() => void checkForRemoteUpdate(true)}
-                        disabled={manuallyRefreshing}
+                    <div className="discussion-rail-header-main">
+                      <span
+                        className={`discussion-rail-status${agentAuth?.state === 'connected' ? ' discussion-rail-status-connected' : ' discussion-rail-status-disconnected'}`}
                       >
-                        {manuallyRefreshing ? 'Refreshing...' : 'Refresh'}
-                      </button>
-                      <button
-                        className="workspace-menu-close"
-                        type="button"
-                        onClick={() => setRailOpen(false)}
-                        aria-label="Close discussion"
-                      >
-                        ×
-                      </button>
+                        {renderRailAgentHint(agentAuth, agentAuthLoading)}
+                      </span>
                     </div>
+                    <button
+                      className="workspace-menu-close"
+                      type="button"
+                      onClick={() => setRailOpen(false)}
+                      aria-label="Close discussion"
+                    >
+                      ×
+                    </button>
                   </div>
 
                   {activeProposalSet ? (
                     <div className="proposal-rail-summary">
-                      <div>
-                        <p className="proposal-kicker">Active proposal</p>
+                      <div className="proposal-rail-summary-copy">
+                        <div className="proposal-summary-meta">
+                          <p className="proposal-kicker">
+                            {pendingProposalItems.length} pending {pendingProposalItems.length === 1 ? 'change' : 'changes'}
+                          </p>
+                          {activeProposalFocusSection ? (
+                            <span className="meta-pill meta-pill-muted proposal-meta-pill">
+                              {activeProposalFocusSection.headingText}
+                            </span>
+                          ) : null}
+                        </div>
                         <p className="proposal-summary">{activeProposalSet.summary}</p>
-                        {activeProposalSet.focusedSectionId ? (
-                          <p className="context-subtle">
-                            Focused on {sectionById.get(activeProposalSet.focusedSectionId)?.headingText ?? 'selected section'}.
+                        {activeProposalSet.rationale ? (
+                          <p className="context-subtle proposal-rationale proposal-rationale-compact">
+                            {activeProposalSet.rationale}
                           </p>
                         ) : null}
                       </div>
@@ -1011,10 +1015,12 @@ export function App() {
                       <div className="thread-list">
                         {conversationComments.map((comment) => {
                           const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
+                          const authorLabel = comment.authorType === 'human' ? 'You' : 'Codex';
 
                           return (
                             <div className="comment-row" key={comment.id} data-author={comment.authorType}>
                               <div className="comment-thread" data-author={comment.authorType}>
+                                <p className="comment-author">{authorLabel}</p>
                                 {commentSection ? <p className="comment-context">{commentSection.headingText}</p> : null}
                                 <p>{comment.body}</p>
                                 <p className="comment-timestamp">{formatArtifactTimestamp(comment.createdAt)}</p>
@@ -1025,6 +1031,7 @@ export function App() {
                         {agentTurnPending ? (
                           <div className="comment-row" data-author="agent">
                             <div className="comment-thread" data-author="agent">
+                              <p className="comment-author">Codex</p>
                               <p>Codex is reviewing the document…</p>
                             </div>
                           </div>
@@ -1034,7 +1041,7 @@ export function App() {
                     ) : (
                       <p className="empty-thread">
                         {agentAuth?.state === 'connected'
-                          ? 'Nothing here yet.'
+                          ? 'Ask Codex about this document or a focused section.'
                           : 'Nothing here yet. Connect the agent in the menu if needed.'}
                       </p>
                     )}
@@ -1068,11 +1075,14 @@ export function App() {
                       <div className="discussion-status-inline">
                         <span className="status-pill">Updated</span>
                         <span className="context-subtle">A newer document version is available.</span>
+                        <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
+                          Reload
+                        </button>
                       </div>
                     ) : null}
                     {latestRevision ? (
                       <div className="discussion-status-inline">
-                        <span className="status-pill">Revision</span>
+                        <span className="status-pill">Last change</span>
                         <span className="context-subtle">{latestRevision.summary}</span>
                       </div>
                     ) : null}

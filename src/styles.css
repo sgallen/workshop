@@ -361,6 +361,13 @@ textarea.path-input {
   margin-top: 14px;
 }
 
+.proposal-card-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
 .proposal-card-header {
   display: flex;
   align-items: flex-start;
@@ -386,8 +393,26 @@ textarea.path-input {
   line-height: 1.35;
 }
 
+.proposal-meta-row,
+.proposal-summary-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.proposal-meta-pill {
+  min-height: 24px;
+  padding: 0 10px;
+  font-size: 0.72rem;
+}
+
 .proposal-rationale {
   margin: 8px 0 0;
+}
+
+.proposal-rationale-compact {
+  margin-top: 6px;
 }
 
 .proposal-rendered {
@@ -763,6 +788,13 @@ textarea.path-input {
   border-bottom: 1px solid rgba(221, 228, 238, 0.82);
 }
 
+.discussion-rail-header-main {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
 .discussion-rail-status {
   display: inline-flex;
   align-items: center;
@@ -789,13 +821,6 @@ textarea.path-input {
   color: #b42318;
 }
 
-.discussion-header-actions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 10px;
-}
-
 .discussion-thread {
   flex: 1 1 auto;
   min-height: 0;
@@ -808,6 +833,13 @@ textarea.path-input {
 
 .proposal-rail-summary {
   margin: 0 14px;
+}
+
+.proposal-rail-summary-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
 }
 
 .thread-list {
@@ -938,9 +970,17 @@ textarea.path-input {
 }
 
 .comment-thread[data-author='human'] {
-  background: color-mix(in srgb, var(--pill) 72%, white 28%);
-  border-color: rgba(62, 90, 138, 0.12);
+  background: linear-gradient(180deg, rgba(232, 239, 249, 0.96) 0%, rgba(243, 247, 253, 0.96) 100%);
+  border-color: rgba(62, 90, 138, 0.18);
   border-top-right-radius: 10px;
+}
+
+.comment-author {
+  margin: 0 0 6px;
+  color: #182535;
+  font-size: 0.73rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
 }
 
 .comment-context {
@@ -965,7 +1005,7 @@ textarea.path-input {
   line-height: 1.45;
 }
 
-.comment-thread p + p {
+.comment-thread p + p:not(.comment-context) {
   margin-top: 6px;
 }
 
@@ -1069,6 +1109,7 @@ textarea.path-input {
   justify-content: flex-start;
   gap: 8px;
   margin-bottom: 6px;
+  flex-wrap: wrap;
 }
 
 .rail-error-inline {
@@ -1311,6 +1352,21 @@ textarea.path-input {
     padding: 12px 12px 10px;
   }
 
+  .proposal-card,
+  .proposal-rail-summary {
+    padding: 12px;
+    border-radius: 12px;
+  }
+
+  .proposal-card-header {
+    gap: 10px;
+  }
+
+  .proposal-actions-inline {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
   .discussion-thread {
     padding: 8px 12px 8px;
   }
@@ -1328,6 +1384,10 @@ textarea.path-input {
 
   .comment-thread p {
     font-size: 0.94rem;
+  }
+
+  .comment-author {
+    font-size: 0.7rem;
   }
 
   .empty-thread,
