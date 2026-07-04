@@ -181,6 +181,8 @@ Rules:
 - If the request is mainly critique, clarification, or a broader rewrite than one section, return discussion only and set proposal to null.
 - If there is already an active pending proposal set and the user is pushing on the wording or direction, prefer returning a refined replacement proposal.
 - If you create a proposal, afterMarkdown must be complete Markdown for the replacement section, including the heading line.
+- If you create a proposal, your discussion messages must describe it as a proposal or suggested revision, not as an already-applied document change.
+- Avoid implementation wording like "I changed", "I updated", or "I tightened" when proposal is not null. Prefer phrasing like "I propose", "A tighter version would be", or "This proposal would".
 - If the user is focused on a section and asks for a rewrite there, prefer that section id.
 - Never invent section ids. Use one of the provided ids exactly.
 

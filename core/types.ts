@@ -84,6 +84,7 @@ export type ProposalSetRecord = {
   documentId: string;
   conversationTurnId: string;
   status: ProposalSetStatus;
+  version: number;
   summary: string;
   rationale: string;
   scope: ProposalScope;
@@ -119,11 +120,15 @@ export type AgentTurnMessage = {
 export type AgentTurnResponse = {
   messages: AgentTurnMessage[];
   proposalSet: ProposalSetRecord | null;
+  latestProposalSet?: ProposalSetRecord | null;
+  proposalHistory?: ProposalSetRecord[];
 };
 
 export type ProposalMutationResult = {
   artifact: Artifact;
   proposalSet: ProposalSetRecord | null;
+  latestProposalSet: ProposalSetRecord | null;
+  proposalHistory: ProposalSetRecord[];
   revisions: RevisionRecord[];
   appliedRevision: RevisionRecord | null;
 };

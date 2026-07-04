@@ -35,6 +35,8 @@ const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
 type ArtifactPayload = {
   artifact?: Artifact;
   proposalSet?: ProposalSetRecord | null;
+  latestProposalSet?: ProposalSetRecord | null;
+  proposalHistory?: ProposalSetRecord[];
   revisions?: RevisionRecord[];
   error?: string;
 };
@@ -70,6 +72,7 @@ export function App() {
   const [artifact, setArtifact] = useState<Artifact | null>(null);
   const [recentArtifacts, setRecentArtifacts] = useState<RecentArtifact[]>([]);
   const [activeProposalSet, setActiveProposalSet] = useState<ProposalSetRecord | null>(null);
+  const [proposalHistory, setProposalHistory] = useState<ProposalSetRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [composerBody, setComposerBody] = useState('');
@@ -153,9 +156,7 @@ export function App() {
     );
   }, [pendingProposalItems]);
   const pendingProposalCount = pendingProposalItems.length;
-  const activeProposalFocusSection = activeProposalSet?.focusedSectionId
-    ? sectionById.get(activeProposalSet.focusedSectionId) ?? null
-    : null;
+  const activeProposalVersion = activeProposalSet?.version ?? 1;
   const activeProposalAnchorCommentId = useMemo(() => {
     if (!activeProposalSet) {
       return null;
@@ -171,6 +172,42 @@ export function App() {
 
     return anchorCommentId;
   }, [activeProposalSet, conversationComments]);
+  const proposalTimelineEntries = useMemo(() => {
+    return proposalHistory.map((proposalSet) => {
+      let anchorCommentId: string | null = null;
+
+      for (const comment of conversationComments) {
+        if (comment.authorType === 'agent' && comment.createdAt === proposalSet.createdAt) {
+          anchorCommentId = comment.id;
+        }
+      }
+
+      return {
+        proposalSet,
+        anchorCommentId
+      };
+    });
+  }, [proposalHistory, conversationComments]);
+  const proposalTimelineByAnchorCommentId = useMemo(() => {
+    const mapped = new Map<string, ProposalSetRecord[]>();
+
+    for (const entry of proposalTimelineEntries) {
+      if (!entry.anchorCommentId) {
+        continue;
+      }
+
+      const current = mapped.get(entry.anchorCommentId) ?? [];
+      current.push(entry.proposalSet);
+      mapped.set(entry.anchorCommentId, current);
+    }
+
+    return mapped;
+  }, [proposalTimelineEntries]);
+  const unattachedProposalTimeline = useMemo(() => {
+    return proposalTimelineEntries
+      .filter((entry) => !entry.anchorCommentId)
+      .map((entry) => entry.proposalSet);
+  }, [proposalTimelineEntries]);
   const pendingTurnMessage = activeProposalSet
     ? attachedSection
       ? `Working on a revision for ${attachedSection.headingText}…`
@@ -180,12 +217,14 @@ export function App() {
       : 'Reviewing the document…';
   const hasStalePendingProposals = hasRemoteUpdate && pendingProposalItems.length > 0;
   const reviewStateLabel = activeProposalSet
-    ? `In review: ${pendingProposalCount} pending ${pendingProposalCount === 1 ? 'change' : 'changes'}`
+    ? activeProposalVersion > 1
+      ? 'In review: updated proposal'
+      : `In review: ${pendingProposalCount} pending ${pendingProposalCount === 1 ? 'change' : 'changes'}`
     : null;
   const composerPlaceholder = attachedSection
     ? `Message about ${attachedSection.headingText}...`
     : activeProposalSet
-      ? 'Reply to refine the pending change...'
+      ? 'Reply to refine the pending proposal...'
       : 'Reply about the document...';
 
   useEffect(() => {
@@ -397,6 +436,7 @@ export function App() {
 
     setArtifact(nextArtifact);
     setActiveProposalSet(payload.proposalSet ?? null);
+    setProposalHistory(payload.proposalHistory ?? []);
     setLastLoadedUpdatedAt(nextArtifact.updatedAt);
     setHasRemoteUpdate(false);
     setDraftPath(nextArtifact.relativePath);
@@ -442,6 +482,7 @@ export function App() {
       if (!preserveCurrentOnError) {
         setArtifact(null);
         setActiveProposalSet(null);
+        setProposalHistory([]);
         setLastLoadedUpdatedAt(null);
         setHasRemoteUpdate(false);
         setAttachedSectionId(null);
@@ -526,6 +567,7 @@ export function App() {
 
     setArtifact(null);
     setActiveProposalSet(null);
+    setProposalHistory([]);
     setLastLoadedUpdatedAt(null);
     setHasRemoteUpdate(false);
     setAttachedSectionId(null);
@@ -744,82 +786,43 @@ export function App() {
     setRailOpen(false);
   }
 
-  function renderThreadSummaryCard(options?: { attached?: boolean }) {
-    if (!activeProposalSet) {
-      return null;
-    }
+  function renderProposalTimelineMarker(proposalSet: ProposalSetRecord) {
+    const targetSectionId = proposalSet.focusedSectionId ?? proposalSet.items[0]?.sectionId ?? null;
 
-    const attached = options?.attached ?? false;
-    const targetSectionId = activeProposalSet.focusedSectionId ?? pendingProposalItems[0]?.sectionId ?? null;
+    const eventState = proposalSet.status === 'dismissed'
+      ? 'rejected'
+      : proposalSet.status === 'partially_applied'
+        ? 'partial'
+        : proposalSet.status === 'applied'
+          ? 'accepted'
+          : 'pending';
+    const eventLabel = eventState === 'pending'
+      ? proposalSet.version > 1
+        ? 'Proposal refined'
+        : 'Proposal suggested'
+      : eventState === 'rejected'
+        ? 'Proposal rejected'
+        : eventState === 'partial'
+          ? 'Proposal partially accepted'
+          : 'Proposal accepted';
+
+    const markerNote = targetSectionId ? (
+      <button
+        className="thread-event-note thread-event-note-clickable"
+        type="button"
+        onClick={() => handleFocusProposalSection(targetSectionId)}
+        onKeyDown={(event) => handleThreadSummaryKeyDown(event, targetSectionId)}
+      >
+        {eventLabel}
+      </button>
+    ) : (
+      <p className="thread-event-note">{eventLabel}</p>
+    );
 
     return (
-      <div className={attached ? 'thread-summary-attachment-wrap' : 'comment-row thread-summary-row'} data-author="agent">
-        <div
-          className={attached ? 'thread-summary-attachment' : 'thread-summary-card'}
-          data-stale={hasStalePendingProposals ? 'true' : 'false'}
-          role={attached ? undefined : 'button'}
-          tabIndex={attached ? undefined : 0}
-          onClick={attached ? undefined : () => handleFocusProposalSection(targetSectionId)}
-          onKeyDown={attached ? undefined : (event) => handleThreadSummaryKeyDown(event, targetSectionId)}
-        >
-          {!attached ? (
-            <div className="thread-summary-top">
-              <div className="thread-summary-meta">
-                {targetSectionId ? (
-                  <button className="text-button text-button-muted thread-summary-link" type="button" onClick={handleOpenProposalInDocument}>
-                    Jump to change
-                  </button>
-                ) : null}
-              </div>
-              <span className="meta-pill meta-pill-warning proposal-inline-pill">
-                {pendingProposalCount} pending {pendingProposalCount === 1 ? 'change' : 'changes'}
-              </span>
-            </div>
-          ) : null}
-          {!attached ? <p className="thread-summary-body">{activeProposalSet.summary}</p> : null}
-          {!attached && activeProposalFocusSection ? (
-            <p className="comment-context thread-summary-context">{activeProposalFocusSection.headingText}</p>
-          ) : null}
-          <div className="proposal-actions proposal-actions-inline proposal-actions-inline-document thread-summary-actions">
-            <button
-              className="secondary-button compact-button proposal-review-button"
-              type="button"
-              onClick={(event) => {
-                event.stopPropagation();
-                void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`);
-              }}
-            >
-              Reject
-            </button>
-            <button
-              className="primary-button compact-button proposal-review-button"
-              type="button"
-              disabled={hasStalePendingProposals}
-              title={hasStalePendingProposals ? 'Reload the document before accepting these changes.' : undefined}
-              onClick={(event) => {
-                event.stopPropagation();
-                void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/accept-all`);
-              }}
-            >
-              Accept
-            </button>
-          </div>
-          {hasStalePendingProposals ? (
-            <div className="proposal-inline-status" role="status" aria-live="polite">
-              <span className="status-pill status-pill-warning">Reload required</span>
-              <span className="context-subtle">Reload before accepting these changes.</span>
-              <button
-                className="text-button"
-                type="button"
-                onClick={(event) => {
-                  event.stopPropagation();
-                  void handleReloadDocument();
-                }}
-              >
-                Reload
-              </button>
-            </div>
-          ) : null}
+      <div className="thread-event-row" key={proposalSet.id}>
+        <div className="thread-event-log">
+          {markerNote}
         </div>
       </div>
     );
@@ -932,6 +935,7 @@ export function App() {
                       className="recent-item"
                       data-active={recent.relativePath === resolvedArtifactPath ? 'true' : 'false'}
                       type="button"
+                      disabled={loading}
                       onClick={() => handleOpenArtifact(recent.relativePath)}
                       aria-current={recent.relativePath === resolvedArtifactPath ? 'page' : undefined}
                     >
@@ -985,11 +989,12 @@ export function App() {
                 <input
                   className="path-input"
                   type="text"
+                  disabled={loading}
                   value={draftPath}
                   onChange={(event) => setDraftPath(event.target.value)}
                   placeholder={DEFAULT_ARTIFACT_PATH}
                 />
-                <button className="secondary-button" type="submit">
+                <button className="secondary-button" type="submit" disabled={loading}>
                   Open
                 </button>
               </div>
@@ -1037,12 +1042,18 @@ export function App() {
                   </button>
                 </div>
               </div>
-              {activeProposalSet || hasRemoteUpdate || agentTurnPending ? (
+              {activeProposalSet || hasRemoteUpdate || agentTurnPending || loading ? (
                 <div className="reader-status-banner">
                   {reviewStateLabel ? (
                     <p className="reader-review-state">
                       <span className="reader-review-dot" aria-hidden="true" />
                       <span>{reviewStateLabel}</span>
+                    </p>
+                  ) : null}
+                  {!reviewStateLabel && loading ? (
+                    <p className="reader-review-state" role="status" aria-live="polite">
+                      <span className="reader-review-dot reader-review-dot-info" aria-hidden="true" />
+                      <span>Refreshing document…</span>
                     </p>
                   ) : null}
                   {!reviewStateLabel && agentTurnPending ? (
@@ -1059,8 +1070,8 @@ export function App() {
                     </div>
                   ) : null}
                   {hasRemoteUpdate ? (
-                    <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
-                      Reload
+                    <button className="text-button" type="button" disabled={loading} onClick={() => void handleReloadDocument()}>
+                      {loading ? 'Reloading…' : 'Reload'}
                     </button>
                   ) : null}
                 </div>
@@ -1144,8 +1155,8 @@ export function App() {
                               <div className="proposal-inline-status" role="status" aria-live="polite">
                                 <span className="status-pill status-pill-warning">Reload required</span>
                                 <span className="context-subtle">Reload the document before accepting this proposal.</span>
-                                <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
-                                  Reload
+                                <button className="text-button" type="button" disabled={loading} onClick={() => void handleReloadDocument()}>
+                                  {loading ? 'Reloading…' : 'Reload'}
                                 </button>
                               </div>
                             ) : null}
@@ -1184,11 +1195,12 @@ export function App() {
                   </div>
 
                   <div className="discussion-thread" ref={threadRef}>
-                    {conversationComments.length > 0 || agentTurnPending || activeProposalSet ? (
+                    {conversationComments.length > 0 || agentTurnPending || proposalHistory.length > 0 ? (
                       <div className="thread-list">
                         {conversationComments.map((comment) => {
                           const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
                           const isActiveProposalAnchor = activeProposalAnchorCommentId === comment.id;
+                          const anchoredProposalTimeline = proposalTimelineByAnchorCommentId.get(comment.id) ?? [];
 
                           return (
                             <div key={comment.id}>
@@ -1209,13 +1221,57 @@ export function App() {
                                     </div>
                                   ) : null}
                                   <p>{comment.body}</p>
-                                  {isActiveProposalAnchor ? renderThreadSummaryCard({ attached: true }) : null}
+                                  {isActiveProposalAnchor && activeProposalSet ? (
+                                    <div className="proposal-thread-footer">
+                                      <div className="proposal-actions proposal-actions-inline proposal-actions-inline-document proposal-thread-actions">
+                                        <button
+                                          className="secondary-button compact-button proposal-review-button"
+                                          type="button"
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`);
+                                          }}
+                                        >
+                                          Reject
+                                        </button>
+                                        <button
+                                          className="primary-button compact-button proposal-review-button"
+                                          type="button"
+                                          disabled={hasStalePendingProposals}
+                                          title={hasStalePendingProposals ? 'Reload the document before accepting these changes.' : undefined}
+                                          onClick={(event) => {
+                                            event.stopPropagation();
+                                            void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/accept-all`);
+                                          }}
+                                        >
+                                          Accept
+                                        </button>
+                                      </div>
+                                      {hasStalePendingProposals ? (
+                                        <div className="proposal-inline-status" role="status" aria-live="polite">
+                                          <span className="status-pill status-pill-warning">Reload required</span>
+                                          <span className="context-subtle">Reload before accepting these changes.</span>
+                                          <button
+                                            className="text-button"
+                                            type="button"
+                                            onClick={(event) => {
+                                              event.stopPropagation();
+                                              void handleReloadDocument();
+                                            }}
+                                          >
+                                            Reload
+                                          </button>
+                                        </div>
+                                      ) : null}
+                                    </div>
+                                  ) : null}
                                 </div>
                               </div>
+                              {anchoredProposalTimeline.map((proposalSet) => renderProposalTimelineMarker(proposalSet))}
                             </div>
                           );
                         })}
-                        {activeProposalSet && !activeProposalAnchorCommentId ? renderThreadSummaryCard() : null}
+                        {unattachedProposalTimeline.map((proposalSet) => renderProposalTimelineMarker(proposalSet))}
                         {agentTurnPending ? (
                           <div className="comment-row" data-author="agent">
                             <div className="comment-thread" data-author="agent">
@@ -1249,8 +1305,8 @@ export function App() {
                             ? 'A newer document version is available. Reload before accepting proposals.'
                             : 'A newer document version is available.'}
                         </span>
-                        <button className="text-button" type="button" onClick={() => void handleReloadDocument()}>
-                          Reload
+                        <button className="text-button" type="button" disabled={loading} onClick={() => void handleReloadDocument()}>
+                          {loading ? 'Reloading…' : 'Reload'}
                         </button>
                       </div>
                     ) : null}

@@ -68,6 +68,10 @@ function listLatestRevisions(store: Store, relativePath: string): RevisionRecord
 }
 
 function refreshProposalSetStatus(proposalSet: ProposalSetRecord): ProposalSetRecord {
+  if (!Number.isFinite(proposalSet.version) || proposalSet.version < 1) {
+    proposalSet.version = 1;
+  }
+
   const pendingCount = proposalSet.items.filter((item) => item.status === 'pending').length;
   const appliedCount = proposalSet.items.filter((item) => item.status === 'applied').length;
 
@@ -99,6 +103,20 @@ function getActiveProposalSet(store: Store, relativePath: string): ProposalSetRe
   }
 
   return null;
+}
+
+function getLatestProposalSet(store: Store, relativePath: string): ProposalSetRecord | null {
+  const proposalSets = artifactStore.getProposalSets(store, relativePath);
+
+  if (proposalSets.length === 0) {
+    return null;
+  }
+
+  return refreshProposalSetStatus(proposalSets[proposalSets.length - 1]);
+}
+
+function listProposalHistory(store: Store, relativePath: string): ProposalSetRecord[] {
+  return artifactStore.getProposalSets(store, relativePath).map((proposalSet) => refreshProposalSetStatus(proposalSet));
 }
 
 function saveProposalSet(store: Store, relativePath: string, proposalSet: ProposalSetRecord): void {
@@ -174,6 +192,7 @@ function upsertActiveProposalSet(
   if (existingActiveProposal) {
     existingActiveProposal.conversationTurnId = humanTurnId;
     existingActiveProposal.status = 'pending';
+    existingActiveProposal.version = (existingActiveProposal.version ?? 1) + 1;
     existingActiveProposal.summary = summary;
     existingActiveProposal.rationale = proposal.rationale.trim();
     existingActiveProposal.scope = 'section';
@@ -191,6 +210,7 @@ function upsertActiveProposalSet(
     documentId: artifact.relativePath,
     conversationTurnId: humanTurnId,
     status: 'pending',
+    version: 1,
     summary,
     rationale: proposal.rationale.trim(),
     scope: 'section',
@@ -216,6 +236,8 @@ async function loadArtifactPayload(relativePath: string): Promise<Artifact> {
 async function buildArtifactState(relativePath: string): Promise<{
   artifact: Artifact;
   proposalSet: ProposalSetRecord | null;
+  latestProposalSet: ProposalSetRecord | null;
+  proposalHistory: ProposalSetRecord[];
   revisions: RevisionRecord[];
 }> {
   const store = await artifactStore.readStore();
@@ -223,6 +245,8 @@ async function buildArtifactState(relativePath: string): Promise<{
   return {
     artifact: await loadArtifactPayload(relativePath),
     proposalSet: getActiveProposalSet(store, relativePath),
+    latestProposalSet: getLatestProposalSet(store, relativePath),
+    proposalHistory: listProposalHistory(store, relativePath),
     revisions: listLatestRevisions(store, relativePath)
   };
 }
@@ -236,6 +260,8 @@ async function buildProposalMutationResult(
   return {
     artifact: state.artifact,
     proposalSet: state.proposalSet,
+    latestProposalSet: state.latestProposalSet,
+    proposalHistory: state.proposalHistory,
     revisions: state.revisions,
     appliedRevision
   };
@@ -399,6 +425,8 @@ app.get('/api/artifact', async (request: Request, response: Response) => {
     response.json({
       artifact,
       proposalSet: getActiveProposalSet(currentStore, artifact.relativePath),
+      latestProposalSet: getLatestProposalSet(currentStore, artifact.relativePath),
+      proposalHistory: listProposalHistory(currentStore, artifact.relativePath),
       revisions: listLatestRevisions(currentStore, artifact.relativePath)
     });
   } catch (error) {
@@ -426,6 +454,8 @@ app.get('/api/comments', async (request: Request, response: Response) => {
       comments: artifact.comments,
       artifact,
       proposalSet: getActiveProposalSet(currentStore, artifact.relativePath),
+      latestProposalSet: getLatestProposalSet(currentStore, artifact.relativePath),
+      proposalHistory: listProposalHistory(currentStore, artifact.relativePath),
       revisions: listLatestRevisions(currentStore, artifact.relativePath)
     });
   } catch (error) {
@@ -645,6 +675,8 @@ app.post('/api/agent/turn', async (request: Request, response: Response) => {
     response.json({
       messages,
       proposalSet: nextState.proposalSet,
+      latestProposalSet: nextState.latestProposalSet,
+      proposalHistory: nextState.proposalHistory,
       artifact: nextState.artifact,
       revisions: nextState.revisions
     });

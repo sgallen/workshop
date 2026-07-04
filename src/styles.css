@@ -342,6 +342,13 @@ textarea.path-input {
   border: 1px solid rgba(255, 212, 153, 0.96);
 }
 
+.meta-pill-success,
+.status-pill-success {
+  background: rgba(235, 248, 239, 0.98);
+  color: #166534;
+  border: 1px solid rgba(167, 243, 208, 0.98);
+}
+
 .status-pill-warning {
   background: rgba(255, 244, 229, 0.96);
   color: #9a5b00;
@@ -529,87 +536,65 @@ textarea.path-input {
   justify-content: center;
 }
 
-.thread-summary-card {
-  display: grid;
-  gap: 8px;
-  width: min(84%, 336px);
-  border: 1px solid rgba(214, 199, 182, 0.96);
-  border-radius: 14px;
-  background: rgba(255, 251, 246, 0.96);
-  padding: 12px;
-  text-align: left;
-  color: inherit;
-  box-shadow: 0 8px 22px rgba(62, 90, 138, 0.05);
-  cursor: pointer;
+.proposal-thread-footer {
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(214, 199, 182, 0.75);
 }
 
-.thread-summary-card[data-stale='true'] {
-  border-color: rgba(191, 90, 51, 0.34);
-  background: rgba(255, 247, 244, 0.96);
-}
-
-.thread-summary-row {
-  justify-content: flex-start;
-}
-
-.thread-summary-top {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.thread-summary-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.thread-summary-link {
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.thread-summary-body {
-  margin: 0;
-  color: #344054;
-  font-size: 0.95rem;
-  line-height: 1.45;
-}
-
-.thread-summary-context {
-  width: fit-content;
-  margin-bottom: 0;
-}
-
-.thread-summary-actions {
-  margin-top: 4px;
+.proposal-thread-actions {
+  margin-top: 0;
   padding: 0;
 }
 
-.thread-summary-card:focus-visible {
-  outline: none;
-  box-shadow:
-    0 0 0 4px rgba(62, 90, 138, 0.14),
-    0 8px 22px rgba(62, 90, 138, 0.05);
+.thread-summary-actions {
+  margin-top: 6px;
+  padding: 0;
 }
 
-.thread-summary-attachment-wrap {
-  margin-top: 10px;
+.thread-event-row {
+  display: flex;
+  justify-content: center;
+  width: 100%;
+  padding: 6px 0 2px;
 }
 
-.thread-summary-attachment {
+.thread-event-log {
   display: grid;
-  gap: 6px;
-  margin-top: 2px;
-  padding-top: 8px;
-  border-top: 1px solid rgba(214, 199, 182, 0.7);
+  justify-items: center;
+  gap: 4px;
+  width: min(100%, 360px);
 }
 
-.thread-summary-attachment .thread-summary-actions {
-  margin-top: 0;
+.thread-event-context {
+  width: fit-content;
+  margin: 0 auto;
+}
+
+.thread-event-note {
+  margin: 0;
+  border: 0;
+  background: transparent;
+  color: color-mix(in srgb, var(--muted) 84%, #5f6f86 16%);
+  font-size: 0.8rem;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: 0.01em;
+  padding: 0;
+}
+
+.thread-event-note-clickable {
+  cursor: pointer;
+}
+
+.thread-event-note-clickable:hover {
+  color: color-mix(in srgb, var(--accent-strong) 68%, var(--muted) 32%);
+}
+
+.thread-event-note-clickable:focus-visible {
+  outline: none;
+  color: var(--accent-strong);
+  text-decoration: underline;
 }
 
 .section-rendered h1,
@@ -1214,8 +1199,7 @@ textarea.path-input {
   background: #ffffff;
 }
 
-.discussion-status-inline,
-.composer-review-note {
+.discussion-status-inline {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -1312,19 +1296,6 @@ textarea.path-input {
   justify-content: flex-start;
 }
 
-.composer-review-note {
-  flex: 1 1 auto;
-  min-width: 0;
-  justify-content: flex-start;
-  gap: 8px;
-}
-
-.composer-review-copy {
-  color: color-mix(in srgb, var(--muted) 88%, #51627d 12%);
-  font-size: 0.78rem;
-  font-weight: 600;
-  line-height: 1.35;
-}
 
 .rail-error-inline {
   margin: 0;
@@ -1603,7 +1574,7 @@ textarea.path-input {
   }
 
   .proposal-inline-topbar,
-  .thread-summary-top {
+  .thread-event-log {
     align-items: flex-start;
   }
 
@@ -1630,7 +1601,7 @@ textarea.path-input {
     padding: 10px 11px 8px;
   }
 
-  .thread-summary-card {
+  .thread-event-log {
     width: 92%;
   }
 
