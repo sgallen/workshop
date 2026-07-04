@@ -72,6 +72,10 @@ function refreshProposalSetStatus(proposalSet: ProposalSetRecord): ProposalSetRe
     proposalSet.version = 1;
   }
 
+  if (proposalSet.status === 'superseded') {
+    return proposalSet;
+  }
+
   const pendingCount = proposalSet.items.filter((item) => item.status === 'pending').length;
   const appliedCount = proposalSet.items.filter((item) => item.status === 'applied').length;
 
@@ -106,17 +110,19 @@ function getActiveProposalSet(store: Store, relativePath: string): ProposalSetRe
 }
 
 function getLatestProposalSet(store: Store, relativePath: string): ProposalSetRecord | null {
-  const proposalSets = artifactStore.getProposalSets(store, relativePath);
+  const proposalSets = listProposalHistory(store, relativePath);
 
   if (proposalSets.length === 0) {
     return null;
   }
 
-  return refreshProposalSetStatus(proposalSets[proposalSets.length - 1]);
+  return proposalSets[proposalSets.length - 1];
 }
 
 function listProposalHistory(store: Store, relativePath: string): ProposalSetRecord[] {
-  return artifactStore.getProposalSets(store, relativePath).map((proposalSet) => refreshProposalSetStatus(proposalSet));
+  return [...artifactStore.getProposalSets(store, relativePath)]
+    .map((proposalSet) => refreshProposalSetStatus(proposalSet))
+    .sort((left, right) => new Date(left.createdAt).getTime() - new Date(right.createdAt).getTime());
 }
 
 function saveProposalSet(store: Store, relativePath: string, proposalSet: ProposalSetRecord): void {
@@ -166,6 +172,23 @@ function buildPendingReplaceSectionItem(
   };
 }
 
+function archiveSupersededProposalSetVersion(store: Store, relativePath: string, proposalSet: ProposalSetRecord): void {
+  const archivedProposalSetId = createId('ps');
+  const archivedProposalSet: ProposalSetRecord = {
+    ...proposalSet,
+    id: archivedProposalSetId,
+    status: 'superseded',
+    items: proposalSet.items.map((item) => ({
+      ...item,
+      id: createId('pi'),
+      proposalSetId: archivedProposalSetId,
+      status: item.status === 'pending' ? 'dismissed' : item.status
+    }))
+  };
+
+  artifactStore.getProposalSets(store, relativePath).push(archivedProposalSet);
+}
+
 function upsertActiveProposalSet(
   store: Store,
   relativePath: string,
@@ -190,6 +213,7 @@ function upsertActiveProposalSet(
   const existingActiveProposal = getActiveProposalSet(store, relativePath);
 
   if (existingActiveProposal) {
+    archiveSupersededProposalSetVersion(store, relativePath, existingActiveProposal);
     existingActiveProposal.conversationTurnId = humanTurnId;
     existingActiveProposal.status = 'pending';
     existingActiveProposal.version = (existingActiveProposal.version ?? 1) + 1;

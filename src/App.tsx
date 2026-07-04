@@ -1,7 +1,7 @@
 import { FormEvent, KeyboardEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
 import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
-import type { Artifact, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
+import type { Artifact, Comment, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
 import { formatRecentActivity } from './lib/formatting';
 import { readJsonResponse } from './lib/read-json-response';
 import {
@@ -86,6 +86,7 @@ export function App() {
   const [lastLoadedUpdatedAt, setLastLoadedUpdatedAt] = useState<string | null>(null);
   const [agentAuth, setAgentAuth] = useState<AgentAuthStatus | null>(null);
   const [agentAuthLoading, setAgentAuthLoading] = useState(true);
+  const [pendingLocalComment, setPendingLocalComment] = useState<Comment | null>(null);
 
   function scrollThreadToBottom() {
     const thread = threadRef.current;
@@ -139,6 +140,7 @@ export function App() {
 
   const attachedSection = attachedSectionId ? sectionById.get(attachedSectionId) ?? null : null;
   const conversationComments = artifact?.comments ?? [];
+  const displayedConversationComments = pendingLocalComment ? [...conversationComments, pendingLocalComment] : conversationComments;
   const resolvedArtifactPath = artifact?.relativePath ?? artifactPath;
   const showOverlay = menuOpen;
   const interactiveOverlay = menuOpen;
@@ -176,7 +178,7 @@ export function App() {
     return proposalHistory.map((proposalSet) => {
       let anchorCommentId: string | null = null;
 
-      for (const comment of conversationComments) {
+    for (const comment of conversationComments) {
         if (comment.authorType === 'agent' && comment.createdAt === proposalSet.createdAt) {
           anchorCommentId = comment.id;
         }
@@ -222,10 +224,10 @@ export function App() {
       : `In review: ${pendingProposalCount} pending ${pendingProposalCount === 1 ? 'change' : 'changes'}`
     : null;
   const composerPlaceholder = attachedSection
-    ? `Message about ${attachedSection.headingText}...`
+    ? `Sharpen ${attachedSection.headingText}...`
     : activeProposalSet
-      ? 'Reply to refine the pending proposal...'
-      : 'Reply about the document...';
+      ? 'Nudge this proposal closer...'
+      : 'Kick off the next move...';
 
   useEffect(() => {
     void loadArtifact(artifactPath);
@@ -425,7 +427,7 @@ export function App() {
     window.requestAnimationFrame(() => {
       scrollThreadToBottom();
     });
-  }, [railOpen, conversationComments.length, agentTurnPending]);
+  }, [railOpen, displayedConversationComments.length, agentTurnPending]);
 
   function applyArtifactPayload(payload: ArtifactPayload | ProposalMutationResult) {
     if (!payload.artifact) {
@@ -440,6 +442,7 @@ export function App() {
     setLastLoadedUpdatedAt(nextArtifact.updatedAt);
     setHasRemoteUpdate(false);
     setDraftPath(nextArtifact.relativePath);
+    setPendingLocalComment(null);
     setAttachedSectionId((current) => (current && nextArtifact.sections.some((section) => section.id === current) ? current : null));
 
     const params = new URLSearchParams(window.location.search);
@@ -570,6 +573,7 @@ export function App() {
     setProposalHistory([]);
     setLastLoadedUpdatedAt(null);
     setHasRemoteUpdate(false);
+    setPendingLocalComment(null);
     setAttachedSectionId(null);
     setComposerBody('');
     setArtifactPath(normalizedPath);
@@ -583,9 +587,19 @@ export function App() {
       return;
     }
 
+    const optimisticComment: Comment = {
+      id: `local-${Date.now()}`,
+      authorType: 'human',
+      body,
+      createdAt: new Date().toISOString(),
+      sectionId: attachedSectionId
+    };
+
     setSubmitting(true);
     setAgentTurnPending(agentAuth?.state === 'connected');
     setError(null);
+    setPendingLocalComment(optimisticComment);
+    setComposerBody('');
 
     try {
       if (agentAuth?.state === 'connected') {
@@ -628,9 +642,10 @@ export function App() {
         applyArtifactPayload(payload);
       }
 
-      setComposerBody('');
       void loadRecents();
     } catch (caughtError) {
+      setPendingLocalComment(null);
+      setComposerBody(body);
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to save comment.');
     } finally {
       setSubmitting(false);
@@ -681,6 +696,10 @@ export function App() {
   }
 
   async function handleProposalMutation(endpoint: string) {
+    if (loading) {
+      return;
+    }
+
     if (hasStalePendingProposals && endpoint.includes('/accept')) {
       setError('Reload the document before accepting a stale proposal.');
       return;
@@ -1137,6 +1156,7 @@ export function App() {
                               <button
                                 className="secondary-button compact-button proposal-review-button"
                                 type="button"
+                                disabled={loading}
                                 onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/dismiss`)}
                               >
                                 Reject
@@ -1144,7 +1164,7 @@ export function App() {
                               <button
                                 className="primary-button compact-button proposal-review-button"
                                 type="button"
-                                disabled={hasStalePendingProposals}
+                                disabled={loading || hasStalePendingProposals}
                                 title={hasStalePendingProposals ? 'Reload the document before accepting this proposal.' : undefined}
                                 onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/accept`)}
                               >
@@ -1195,9 +1215,9 @@ export function App() {
                   </div>
 
                   <div className="discussion-thread" ref={threadRef}>
-                    {conversationComments.length > 0 || agentTurnPending || proposalHistory.length > 0 ? (
+                    {displayedConversationComments.length > 0 || agentTurnPending || proposalHistory.length > 0 ? (
                       <div className="thread-list">
-                        {conversationComments.map((comment) => {
+                        {displayedConversationComments.map((comment) => {
                           const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
                           const isActiveProposalAnchor = activeProposalAnchorCommentId === comment.id;
                           const anchoredProposalTimeline = proposalTimelineByAnchorCommentId.get(comment.id) ?? [];
@@ -1227,6 +1247,7 @@ export function App() {
                                         <button
                                           className="secondary-button compact-button proposal-review-button"
                                           type="button"
+                                          disabled={loading}
                                           onClick={(event) => {
                                             event.stopPropagation();
                                             void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`);
@@ -1237,7 +1258,7 @@ export function App() {
                                         <button
                                           className="primary-button compact-button proposal-review-button"
                                           type="button"
-                                          disabled={hasStalePendingProposals}
+                                          disabled={loading || hasStalePendingProposals}
                                           title={hasStalePendingProposals ? 'Reload the document before accepting these changes.' : undefined}
                                           onClick={(event) => {
                                             event.stopPropagation();
@@ -1284,8 +1305,8 @@ export function App() {
                     ) : (
                       <p className="empty-thread">
                         {agentAuth?.state === 'connected'
-                          ? 'Ask Codex about this document or a focused section.'
-                          : 'Nothing here yet. Connect the agent in the menu if needed.'}
+                          ? 'Fresh bench. Start with the big move or a tiny fix.'
+                          : 'Fresh bench. Connect the workshop flow from the menu if needed.'}
                       </p>
                     )}
                   </div>
@@ -1308,12 +1329,6 @@ export function App() {
                         <button className="text-button" type="button" disabled={loading} onClick={() => void handleReloadDocument()}>
                           {loading ? 'Reloading…' : 'Reload'}
                         </button>
-                      </div>
-                    ) : null}
-                    {agentTurnPending ? (
-                      <div className="discussion-status-inline" role="status" aria-live="polite">
-                        <span className="status-pill status-pill-info">Agent is thinking</span>
-                        <span className="context-subtle">{pendingTurnMessage}</span>
                       </div>
                     ) : null}
                     {error ? <p className="rail-error-inline">{error}</p> : null}

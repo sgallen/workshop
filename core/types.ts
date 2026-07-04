@@ -62,7 +62,7 @@ export type ProposalItemKind =
 
 export type ProposalItemStatus = 'pending' | 'applied' | 'dismissed';
 
-export type ProposalSetStatus = 'pending' | 'partially_applied' | 'applied' | 'dismissed';
+export type ProposalSetStatus = 'pending' | 'superseded' | 'partially_applied' | 'applied' | 'dismissed';
 
 export type ProposalScope = 'section' | 'document' | 'mixed';
 
