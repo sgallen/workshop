@@ -179,6 +179,30 @@ If the user focuses a section:
 
 The model may still propose broader changes if that is the best answer.
 
+### Suggested First Focus Payload
+
+When a section is focused, the first turn payload should include a small explicit metadata block rather than only a raw section ID.
+
+Recommended shape:
+
+```json
+{
+  "focusedSection": {
+    "id": "problem-2",
+    "headingText": "Problem",
+    "level": 2
+  }
+}
+```
+
+Guidelines:
+
+- include enough metadata for the model to understand what the user is pointing at
+- do not attempt full source-range anchoring in the first slice
+- treat this focus block as guidance, not as a hard document truncation boundary
+
+This keeps the first turn contract simple while still making section-focused requests explicit.
+
 ## Proposal Model
 
 ### Proposal Set
@@ -497,6 +521,45 @@ If a proposal targets the whole document:
 - render all changed sections inline where possible
 - allow `Accept all` and `Dismiss all` from the rail
 
+### Suggested First Apply Rule For `replace_section`
+
+For the first implementation cut, `replace_section` should apply only when the targeted section can still be resolved cleanly in the current canonical document.
+
+Recommended first-pass rule:
+
+1. locate the target by `sectionId`
+2. derive the current source slice for that section from the latest parsed document structure
+3. compare the current section markdown with `beforeMarkdown`
+4. if they still match closely enough, replace that slice with `afterMarkdown`
+5. if they do not match, return `proposal_conflict`
+
+Practical constraint:
+
+- do not attempt fuzzy multi-region reconciliation in v1
+- do not silently apply a proposal against a section that has drifted materially
+- prefer an explicit conflict over a surprising partial apply
+
+This keeps the first proposal-apply path predictable and preserves trust in the canonical document.
+
+### Suggested First Apply Rule For `replace_document`
+
+For the first implementation cut, `replace_document` should apply only when the proposal still targets the exact current canonical document snapshot it was generated from.
+
+Recommended first-pass rule:
+
+1. load the latest canonical markdown for the document
+2. compare it with the proposal item's `beforeMarkdown`
+3. if they still match, replace the full canonical markdown with `afterMarkdown`
+4. if they do not match, return `proposal_conflict`
+
+Practical constraint:
+
+- do not attempt three-way merge behavior in v1
+- do not silently overwrite newer canonical document edits
+- prefer an explicit conflict over a surprising full-document replace
+
+This keeps whole-document proposals consistent with the section-level trust model.
+
 ## Minimal v1 Screen States
 
 ### Document Viewer
@@ -667,6 +730,15 @@ Guidelines:
 - append revisions rather than mutating history in place
 - store full-document revision snapshots for simplicity
 
+Backward-compatibility rules:
+
+- existing stores that only contain `artifacts` and `recents` must still load cleanly
+- missing `proposalSetsByDocument` or `revisionsByDocument` keys should default to empty objects
+- loading old store files must not require a one-time manual migration step
+- the first write after load can persist the expanded shape opportunistically
+
+This keeps the current prototype usable while proposal/revision storage lands incrementally.
+
 ### Suggested First TypeScript Additions
 
 The first pass does not need perfect architecture. It needs stable shared types.
@@ -797,6 +869,52 @@ Practical first rendering rule:
 - if `activeProposalSet` is `null`, the app should behave almost exactly like today's experience
 - if `activeProposalSet` exists, the document pane and discussion rail should layer proposal UI on top of the existing document/comment experience rather than replacing it wholesale
 
+### Comment And Conversation Coexistence Rule
+
+The current prototype already has persisted document comments and an existing discussion rail.
+
+The first proposal/revision implementation should not require replacing that model all at once.
+
+Recommended v1 rule:
+
+- treat existing persisted comments as the starting conversation history for a document
+- allow new agent turns to append discussion into the same visible rail
+- introduce proposal-set state beside the existing comment flow, not instead of it
+
+Practical consequence:
+
+- `comments` remain a valid source for rendering the rail during the first slice
+- proposal-set summaries and controls can appear alongside those comments
+- a later refactor can rename or normalize `comments` into richer `conversationTurns` once the proposal loop is real
+
+This keeps the first implementation compatible with the current UI and local data while still moving toward the cleaner long-term conversation model.
+
+### Suggested First Proposal Summary Block
+
+When a proposal set is active, the discussion rail should render one compact summary block above the ordinary thread.
+
+Minimum useful contents:
+
+- proposal-set summary text
+- proposal count
+- scope label
+  - `section`
+  - `document`
+  - `mixed`
+- focused section label when relevant
+- global actions:
+  - `Accept all`
+  - `Dismiss all`
+  - `Jump to first change`
+
+Practical rule:
+
+- keep the summary block short enough that the discussion rail still feels conversational
+- do not repeat long replacement text there
+- treat the rail summary as navigation and control, not as the main review surface
+
+This keeps the document pane primary while still making active proposal state obvious.
+
 ### Suggested First Server Helpers
 
 The first server pass should stay explicit rather than prematurely abstract.
@@ -910,6 +1028,39 @@ Recommended test split:
 - manual smoke check on phone-sized layout before calling the slice done
 
 This is enough to keep the first proposal/revision implementation honest without turning the initial slice into a testing detour.
+
+### Suggested First Edit Order By File
+
+To reduce churn, land the first implementation slice in this order:
+
+1. `server/server.ts`
+   - add storage shape defaults
+   - add proposal/revision types if still local
+   - add helper functions
+   - add new turn and mutation endpoints
+
+2. `server/codex-agent.ts`
+   - adapt the current critique path only as needed to support the new turn result shape
+   - avoid broad auth/runtime changes in the same slice
+
+3. `src/App.tsx`
+   - add proposal/revision state
+   - route the composer through the new turn path
+   - render one inline proposal kind
+   - wire local and global proposal controls
+
+4. `src/styles.css`
+   - add only the styling needed for inline proposals, proposal summaries, and revision affordances
+
+5. focused verification
+   - run server-side checks first
+   - then run the narrow UI and phone smoke pass
+
+Practical sequencing rule:
+
+- do not start with CSS or broad component restructuring
+- stabilize the data contract first
+- then make the smallest UI changes that prove the loop end to end
 
 ## Notes For Future Versions
 
