@@ -704,6 +704,88 @@ The first coding slice should likely be:
 
 If that works, the product has crossed from "agent comments on a document" to "agent proposes concrete document edits that can be accepted into history."
 
+### Suggested First Open/Resume And Reload Contract
+
+The first implementation should make document identity and freshness explicit without inventing a heavy session model.
+
+Recommended contract:
+
+1. the shareable Workshop URL remains document-centric
+   - `/?path=<repo-relative-document-path>`
+2. the server resolves that path and treats it as the durable document key for v1
+3. opening the same path again should resume the same document context
+   - same recents identity
+   - same proposal-set bucket
+   - same revision history bucket
+4. the initial document load should return enough metadata for the client to reason about freshness
+   - repo-relative path
+   - title
+   - last modified time or equivalent freshness token
+5. the client should keep using the current meta-check pattern to detect file changes outside the page
+6. when the underlying file changed externally:
+   - if there is no active pending proposal set, allow a straightforward reload into the latest canonical state
+   - if there is an active pending proposal set, make the stale state obvious and require an explicit reload or conflict path before accept
+
+Practical v1 rules:
+
+- do not create a second opaque session ID that becomes the primary human-facing object
+- do not require the client to remember machine-specific absolute paths once the server has resolved the document
+- do not silently keep rendering stale canonical content after freshness checks fail
+- do not silently rebase pending proposals onto newly changed file content
+
+This gives `server.ts` and `App.tsx` a crisp first target:
+
+- stable reopen behavior is path-based
+- freshness is metadata-driven
+- reload is explicit when canonical state changed under the page
+- proposal trust is preserved by preferring visible conflict/reload behavior over clever auto-merge
+
+### Suggested First Agent-Open Handoff Contract
+
+The first implementation should make the agent-to-Workshop handoff explicit enough that link creation and human landing behavior are predictable.
+
+Recommended contract:
+
+1. the agent-side caller provides one real document path at the server boundary
+2. the server resolves that path into the repo-relative document key used by Workshop
+3. the server returns a document-open result that includes:
+   - stable document URL
+   - repo-relative document path
+   - display title
+   - whether this was a new open or a resume of existing document context
+4. the shareable object the agent sends back to the human is the stable document URL, not a raw local path
+5. opening that URL should land the human directly in the document view with:
+   - current canonical document content
+   - document identity visible
+   - current freshness state available
+   - current active proposal set and revision cues if they exist
+
+Recommended first response shape:
+
+```json
+{
+  "artifact": {},
+  "documentUrl": "/?path=docs/project-brief.md",
+  "resolvedPath": "docs/project-brief.md",
+  "title": "Workshop Project Brief",
+  "resumed": true
+}
+```
+
+Practical v1 rules:
+
+- path resolution should happen on the server, not in the human-visible handoff flow
+- the returned URL should stay simple enough to share in chat without explanation
+- do not require the human to perform a second document-picking step after opening the link
+- do not leak machine-specific absolute paths into the shared link or visible primary UI
+- if the path cannot be resolved or opened, fail before link-sharing rather than producing a misleading URL
+
+This keeps the handoff aligned with the product promise:
+
+- the agent opens a document
+- the human follows one link
+- Workshop loads the right document context without setup ceremony
+
 ### Suggested v1 Storage Shape
 
 To keep the first server implementation simple, extend the existing local JSON store instead of introducing a second persistence mechanism first.
@@ -789,6 +871,419 @@ Recommended mapping:
 - `workspace-menu`
   - should stay focused on agent status and document switching
   - should not become the primary proposal-review surface
+
+### Suggested First Freshness And Reload UI
+
+The first implementation should make freshness state visible in a small, predictable place instead of turning reload into a hidden background behavior.
+
+Recommended first-pass behavior:
+
+1. keep document identity in the `reader-bar`
+2. add a compact document-state chip or line beside that identity
+3. support three useful states:
+   - `Up to date`
+   - `Changed on disk`
+   - `Reload required before apply`
+4. when `/api/artifact/meta` shows the file changed externally:
+   - show a compact reload banner near the `reader-bar`
+   - keep the canonical document visible until the user reloads
+5. when there is no active pending proposal set:
+   - the banner can offer a primary `Reload` action
+6. when there is an active pending proposal set:
+   - the banner should explain that pending proposals may be stale
+   - proposal accept actions should be blocked until reload or explicit conflict resolution
+
+Minimum useful banner contents:
+
+- short freshness message
+- last checked or changed cue if already available from metadata
+- `Reload`
+- optional `Dismiss` only if dismissal does not hide a real stale state indefinitely
+
+Practical rules:
+
+- do not auto-reload while the user is reading or reviewing proposals
+- do not hide stale-state warnings only inside the discussion rail
+- do not treat reload as a destructive reset; it is a refresh of canonical file-backed state
+- if reload clears an invalid active proposal set, say so explicitly in the UI
+
+This keeps the first freshness model understandable on phone:
+
+- document status is visible near document identity
+- reload is a clear user action
+- pending proposal trust is preserved when the file changed underneath the page
+
+### Suggested First Revision Awareness UI
+
+The first implementation should make revision state legible from the document view without forcing the user into a separate history workflow.
+
+Recommended first-pass behavior:
+
+1. keep a compact revision status area in the `reader-bar`
+2. show the latest revision summary in a lightweight form when available
+3. expose one primary document-level history action:
+   - `Undo last`
+4. expose one secondary navigation action when revisions exist:
+   - `View history`
+5. after accept or restore:
+   - briefly highlight the newest revision cue
+   - keep the user in the document pane
+
+Minimum useful revision status contents:
+
+- latest revision summary or short label
+- latest revision timestamp or relative recency cue
+- source label when it helps orientation
+  - `agent`
+  - `restore`
+  - `undo`
+
+Recommended `Undo last` rules:
+
+- only enable it when there is a clear latest reversible revision
+- treat `Undo last` as a document-level action, not a proposal-level action
+- after successful undo, refresh the canonical document payload and revision list immediately
+- show the undo result as a new latest revision entry rather than silently moving backward in time
+
+Practical constraints:
+
+- do not bury revision status only inside the history view
+- do not make the user infer whether a document change is already canonical
+- do not overload inline proposal controls with undo behavior meant for accepted revisions
+- do not require diff browsing before the user can recover from the most recent accepted change
+
+This keeps revision awareness aligned with the main product loop:
+
+- the document stays primary
+- the latest canonical state is understandable at a glance
+- reversal of the most recent accepted change is easy without making history the dominant surface
+
+### Suggested First Agent Availability UI
+
+The first implementation should make agent availability obvious at the point where the human tries to ask for help, without turning auth/runtime state into the dominant product surface.
+
+Recommended first-pass behavior:
+
+1. keep the primary agent-availability cue in or near the `discussion-composer`
+2. support three useful states:
+   - `Ready`
+   - `Connecting`
+   - `Unavailable`
+3. when the agent is `Ready`:
+   - the composer stays enabled
+   - normal send behavior uses `POST /api/agent/turn`
+4. when the agent is `Connecting`:
+   - the composer can remain visible but send should be disabled
+   - show a short status line instead of a generic spinner-only state
+5. when the agent is `Unavailable`:
+   - keep the current document and discussion visible
+   - disable agent-turn submission
+   - surface one clear reconnect or connect action near the composer or workspace controls
+
+Minimum useful availability messaging:
+
+- short status label
+- concise reason when known
+  - auth missing
+  - provider disconnected
+  - runtime unavailable
+- one obvious next step
+  - `Connect`
+  - `Reconnect`
+
+Practical rules:
+
+- do not hide agent availability only in a distant settings area
+- do not blank or replace the document view when the agent becomes unavailable
+- do not conflate `agentTurnPending` with provider/auth loading
+- do not allow the composer to fail silently when send is impossible
+
+This keeps the v1 loop trustworthy:
+
+- the human can tell whether the agent can respond
+- the document remains usable even when the runtime is down
+- reconnect behavior stays close to the place where the user asks for help
+
+### Suggested First History View UI
+
+The first implementation should keep revision history lightweight, phone-usable, and clearly secondary to the document pane.
+
+Recommended first-pass behavior:
+
+1. open history as a simple panel or sheet rather than a separate complex workspace
+2. show revisions newest first
+3. keep each revision item compact and tappable
+4. allow one direct action per item:
+   - `Restore`
+5. highlight the current newest revision at the top when it resulted from the latest accept, undo, or restore action
+
+Minimum useful revision item contents:
+
+- short summary
+- timestamp or relative recency cue
+- source label when helpful
+- optional proposal-set relationship if already available
+
+Recommended empty and loading states:
+
+- if no revisions exist, show a short empty state that explains history appears after accepted changes
+- if revisions are loading, keep the panel skeleton short and avoid blocking the main document pane
+
+Practical rules:
+
+- do not require full diff rendering in v1 history
+- do not let history become the default landing surface after an accept
+- do not hide `Restore` behind multi-step menus in the first pass
+- do not make history panel depth or navigation more complex than the document review flow itself
+
+This keeps the first history UI proportional to the v1 goal:
+
+- revision history is available when needed
+- restoring is easy to find
+- the document remains the center of gravity
+
+### Suggested First `Review changes` Behavior
+
+The first implementation should keep `Review changes` lightweight and document-first rather than turning it into a separate diff product.
+
+Recommended first-pass behavior:
+
+1. `Review changes` opens or focuses the discussion rail if needed
+2. it brings the active proposal summary block into view
+3. it immediately triggers the same navigation as `Jump to first change`
+4. if the active proposal set is whole-document only, it brings the user to the document top banner instead
+5. if there is no active proposal set, the control should be hidden or disabled
+
+Practical rules:
+
+- do not open a separate full-screen diff surface in v1
+- do not make `Review changes` depend on a history view
+- do not duplicate long replacement text inside the rail just because the user tapped the control
+- do not let `Review changes` behave differently from the inline proposal review model
+
+This keeps the control honest in the first slice:
+
+- it helps the user find the active proposal review context
+- it preserves the document pane as the primary review surface
+- it avoids promising a heavier review workflow than v1 actually supports
+
+### Suggested First Discussion-Only Turn UI
+
+The first implementation should treat discussion-only or clarifying-question turns as first-class outcomes, not as empty proposal failures.
+
+Recommended first-pass behavior:
+
+1. when an agent turn returns messages and no `proposalSet`, append those messages normally in the discussion rail
+2. keep the document pane unchanged
+3. keep proposal-summary controls hidden when there is no active proposal set
+4. if the agent response is primarily a clarifying question:
+   - keep focus on the discussion composer
+   - make it obvious the next useful move is a human reply, not document review
+
+Minimum useful cues:
+
+- ordinary agent message rendering in the rail
+- no empty proposal placeholder
+- no stale proposal controls from an earlier cleared turn
+
+Practical rules:
+
+- do not treat lack of a proposal as an error state
+- do not show `Accept all`, `Dismiss all`, or `Review changes` when there is no active proposal set
+- do not force the user into a history or document jump for question-only turns
+- do not blur the distinction between conversational guidance and concrete editable proposals
+
+This keeps the loop coherent:
+
+- some turns help by discussing or asking
+- some turns help by proposing edits
+- the UI reflects that difference cleanly without making discussion-only turns feel broken
+
+### Suggested First Focused-Section UI Cue
+
+The first implementation should make section focus visible in the document view so section-scoped turns feel anchored to the page, not only to request payloads.
+
+Recommended first-pass behavior:
+
+1. when a section is focused, highlight the matching `section-card` in a lightweight way
+2. show a small scope cue near the composer or proposal summary when the current turn is section-scoped
+3. if an active proposal set has `focusedSectionId`, reuse that same section label in the rail summary block
+4. when focus is cleared, remove the extra section-scoped emphasis without changing the canonical document content
+
+Minimum useful cues:
+
+- subtle visual emphasis on the focused section
+- focused section heading text when available
+- clear distinction between `section` focus and whole-document scope
+
+Practical rules:
+
+- do not make focus styling look like accepted document change styling
+- do not require the user to infer current scope only from hidden IDs or API state
+- do not keep stale focused-section cues after the user switches back to document scope
+- do not let focused-section emphasis overpower proposal or reload warnings
+
+This keeps section-aware turns understandable in v1:
+
+- the user can see what part of the document is in focus
+- discussion, proposals, and scope labels stay aligned
+- document scope and section scope feel intentionally different without adding heavy UI
+
+### Suggested First Partially-Applied Proposal UI
+
+The first implementation should make partially applied proposal sets legible instead of collapsing them into either "still pending" or "fully done."
+
+Recommended first-pass behavior:
+
+1. keep the proposal set visible while at least one proposal item is still pending
+2. update the rail summary block to reflect mixed item state after each accept or dismiss
+3. remove inline overlays only for items that are no longer pending
+4. keep remaining pending proposal items reviewable in place
+5. when the final pending item is resolved, clear the active proposal set from ordinary review UI
+
+Minimum useful summary cues:
+
+- pending item count
+- optional resolved item count
+- summary text that still describes the proposal set as a whole
+- global actions that still make sense for the remaining pending items
+
+Practical rules:
+
+- do not keep showing `Accept` or `Dismiss` controls on already resolved items
+- do not make a partially applied set look identical to a fully pending set if counts are already available
+- do not discard the remaining pending context after one item is accepted
+- do not treat partial application as a special history mode; it is still ordinary proposal review
+
+This keeps the first multi-item experience coherent:
+
+- accepted items become canonical and disappear from proposal review
+- remaining items stay actionable
+- the user can tell the set is mid-resolution without leaving the document loop
+
+### Suggested First Dismissed-Proposal UI
+
+The first implementation should make full proposal dismissal feel intentional and clean rather than like proposal state silently vanished.
+
+Recommended first-pass behavior:
+
+1. when all items in a proposal set are dismissed, remove inline proposal overlays from the document pane
+2. clear proposal-specific global controls from the discussion rail
+3. leave the surrounding conversation visible
+4. optionally show one short-lived dismissed-state confirmation in the rail status area
+5. return the document to its ordinary no-active-proposal state without forcing a reload
+
+Minimum useful cues:
+
+- canonical document remains unchanged
+- active proposal summary block disappears
+- brief confirmation that the proposal set was dismissed when that would otherwise feel abrupt
+
+Practical rules:
+
+- do not leave stale `Accept all`, `Dismiss all`, or `Review changes` controls visible after dismissal
+- do not create a revision entry for dismissal-only actions
+- do not make dismissal feel like document deletion or data loss
+- do not keep dismissed proposal text occupying prime rail space once the set is resolved
+
+This keeps dismissal behavior understandable in v1:
+
+- rejection is explicit
+- the document view returns to its normal state
+- conversation continuity remains intact even though proposal review is over
+
+### Suggested First Idle And Discussing Rail State
+
+The first implementation should make the discussion rail feel useful even when no proposal set is active.
+
+Recommended first-pass behavior:
+
+1. in `Idle`, show a lightweight empty state in the rail rather than a blank column
+2. in `Discussing`, render ordinary human and agent conversation without proposal-summary UI
+3. keep the composer available as the primary next action when the agent is ready
+4. if the document has prior comments or discussion, use that history instead of the empty state
+
+Minimum useful idle-state contents:
+
+- one short line explaining that the user can ask the agent for critique or edits
+- no fake proposal placeholders
+- no hidden requirement to select a section before starting
+
+Practical rules:
+
+- do not show dormant proposal controls in idle/discussing states
+- do not make the rail feel broken just because no proposal has been generated yet
+- do not let the empty state overpower existing conversation history
+- do not require a document mutation path for every useful turn
+
+This keeps the no-active-proposal path intentional in v1:
+
+- the rail still has a clear purpose
+- discussion-first turns feel normal
+- proposal review appears only when there is actually something to review
+
+### Suggested First Agent-Turn Pending UI
+
+The first implementation should make "agent is thinking" visible without turning a pending turn into a full-screen loading state.
+
+Recommended first-pass behavior:
+
+1. when a human submits a prompt, set `agentTurnPending`
+2. keep the document pane visible and interactive for reading
+3. disable duplicate send actions from the composer until the turn resolves
+4. show a compact pending cue near the composer or latest rail message
+5. clear the pending cue as soon as the turn result arrives or fails
+
+Minimum useful pending cues:
+
+- short status text such as "Agent is thinking"
+- visible disabled-send state in the composer
+- no fake proposal summary before the server actually returns one
+
+Practical rules:
+
+- do not block the whole page behind a modal spinner
+- do not conflate pending-turn state with provider connect/disconnect state
+- do not render speculative proposal UI before the response lands
+- do not allow repeated accidental submissions while one turn is already in flight
+
+This keeps the first turn loop understandable:
+
+- the user can tell their prompt was accepted
+- the document stays primary while waiting
+- the eventual response can cleanly become either discussion or a proposal set
+
+### Suggested First `proposal_conflict` UI
+
+The first implementation should make proposal conflicts explicit and recoverable without pretending the app can safely auto-merge.
+
+Recommended first-pass behavior:
+
+1. when accept or restore returns `proposal_conflict`, keep the canonical document unchanged
+2. show a compact conflict message in the existing error/status area
+3. keep the user oriented on the affected document or section when possible
+4. if the conflict came from stale file state, pair the message with the existing reload path
+5. preserve the active proposal set unless the server explicitly marks it unusable
+
+Minimum useful conflict messaging:
+
+- short explanation that the proposal no longer matches the current document state
+- one obvious next step
+  - `Reload`
+  - or continue discussing/retry after reload
+
+Practical rules:
+
+- do not silently dismiss a conflicted proposal
+- do not partially apply a conflicted proposal and then report failure
+- do not describe the conflict as a generic network or provider error
+- do not force the user into history view just to recover from a stale proposal
+
+This keeps conflict handling trustworthy in v1:
+
+- failed apply leaves the real document intact
+- the user understands why accept did not work
+- recovery stays inside the normal document and discussion loop
 
 ### Suggested First UI Behavior
 
@@ -915,6 +1410,71 @@ Practical rule:
 
 This keeps the document pane primary while still making active proposal state obvious.
 
+### Suggested First `Jump to first change` Behavior
+
+The first implementation should keep this control simple and deterministic.
+
+Recommended behavior:
+
+1. find the first still-pending proposal item in the active proposal set
+2. if that item has a `sectionId`, scroll the document pane to the matching `section-card`
+3. if the first item is `replace_document`, scroll to the top of the document pane
+4. optionally highlight the target section briefly after scroll
+
+Practical constraint:
+
+- do not try to compute a visual diff anchor in v1
+- do not make this depend on discussion-thread position
+- prefer a reliable section/document jump over a clever but fragile anchor
+
+This keeps the global rail control useful without adding fragile navigation logic to the first slice.
+
+### Suggested First `replace_document` UI Behavior
+
+Whole-document proposals should still preserve the document-first review model.
+
+Recommended first-pass behavior:
+
+1. keep the canonical rendered document visible in the main pane
+2. show a compact whole-document proposal banner near the top of the document pane
+3. use the discussion rail summary block for overview and global actions
+4. allow `Jump to first change` to take the user to the top of the document pane
+
+Minimum useful whole-document banner contents:
+
+- short proposal summary
+- label that the scope is whole-document
+- `Accept all`
+- `Dismiss all`
+- `Discuss`
+
+Practical constraint:
+
+- do not replace the whole main pane with a separate diff viewer in v1
+- do not hide the canonical document behind the proposal
+- keep the first whole-document experience consistent with the section-first interaction model
+
+This gives whole-document proposals a credible home without forcing a parallel review surface into the first slice.
+
+### Suggested First `Discuss` Behavior
+
+The first `Discuss` action should reinforce the document-first loop without adding a second complex interaction model.
+
+Recommended behavior:
+
+1. open or focus the discussion rail
+2. anchor the next human prompt to the selected proposal item or active proposal set
+3. prefill nothing by default, but make the proposal context visible in the rail
+4. treat the next submitted message as a follow-up turn against the current document plus that proposal context
+
+Practical constraint:
+
+- `Discuss` should not apply or dismiss anything by itself
+- it should deepen the current conversation around a proposal, not fork a separate workflow
+- the user should stay oriented in the document while the rail carries the back-and-forth
+
+This keeps the first proposal controls coherent: `Accept` mutates, `Dismiss` rejects, and `Discuss` continues the human-agent loop in context.
+
 ### Suggested First Server Helpers
 
 The first server pass should stay explicit rather than prematurely abstract.
@@ -1028,6 +1588,56 @@ Recommended test split:
 - manual smoke check on phone-sized layout before calling the slice done
 
 This is enough to keep the first proposal/revision implementation honest without turning the initial slice into a testing detour.
+
+### Suggested First Revision List Contract
+
+The first revision list should stay lightweight and navigation-oriented.
+
+Recommended revision list item shape:
+
+```json
+{
+  "id": "rev_123",
+  "createdAt": "2026-07-03T21:00:00Z",
+  "summary": "Accepted rewrite for Problem section",
+  "source": "proposal_item_accept",
+  "proposalSetId": "ps_123"
+}
+```
+
+Practical rules:
+
+- do not return full revision markdown in the lightweight list endpoint
+- keep list items sufficient for labels, ordering, and restore actions
+- fetch or include full snapshot content only when a restore or detailed preview path actually needs it
+
+First-pass UI use:
+
+- render the latest few revisions in newest-first order
+- highlight the newest revision after accept or restore
+- expose restore from the revision item, not from a separate complex history shell
+
+This keeps revision history understandable without turning v1 into a full diff browser.
+
+### Suggested First Restore Behavior
+
+The first restore interaction should be explicit and conservative.
+
+Recommended behavior:
+
+1. user chooses `Restore` from a revision item
+2. server restores that snapshot as the new canonical document state
+3. server records a new latest revision with source `restore_revision`
+4. client refreshes the canonical document payload, revision list, and any active proposal state
+5. the restored revision result becomes the newest highlighted revision in UI
+
+Practical rules:
+
+- restoring a revision should clear any now-invalid active proposal set, or return `proposal_conflict` if the server cannot safely reconcile both states
+- restore should never rewrite or delete newer history entries
+- the UI should treat restore as a new forward-moving event, not as time travel that erases the timeline
+
+This keeps the first restore path consistent with the append-only revision model already defined above.
 
 ### Suggested First Edit Order By File
 

@@ -280,6 +280,570 @@
         line-height: 1.5;
       }
 
+      .phone-demo {
+        display: grid;
+        place-items: center;
+        padding: 18px;
+        background:
+          radial-gradient(circle at top left, rgba(178, 76, 39, 0.08), transparent 32%),
+          linear-gradient(180deg, #efe6d8 0%, #e4d7c8 100%);
+      }
+
+      .phone-shell {
+        position: relative;
+        width: min(100%, 390px);
+        min-height: 740px;
+        border: 10px solid #1f1a17;
+        border-radius: 36px;
+        overflow: hidden;
+        background:
+          linear-gradient(180deg, rgba(255, 250, 243, 0.98) 0%, rgba(246, 238, 228, 0.98) 100%);
+        box-shadow: 0 24px 48px rgba(34, 24, 17, 0.18);
+      }
+
+      .phone-doc {
+        padding: 18px 14px 20px;
+      }
+
+      .phone-doc-bar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      .phone-doc-title {
+        font-size: 1rem;
+        font-weight: 700;
+      }
+
+      .phone-doc-meta {
+        color: var(--muted);
+        font-size: 0.82rem;
+      }
+
+      .phone-doc-block {
+        margin-bottom: 12px;
+        border: 1px solid rgba(215, 200, 183, 0.9);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.72);
+        padding: 14px;
+      }
+
+      .phone-doc-block h3 {
+        margin-bottom: 8px;
+        font-size: 1rem;
+      }
+
+      .phone-doc-block p {
+        color: #433a35;
+        line-height: 1.5;
+        font-size: 0.95rem;
+      }
+
+      .phone-doc-block p + p {
+        margin-top: 8px;
+      }
+
+      .phone-focus {
+        position: relative;
+        border-color: rgba(178, 76, 39, 0.35);
+        box-shadow: inset 0 0 0 1px rgba(178, 76, 39, 0.12);
+      }
+
+      .phone-focus::before {
+        content: "Active section";
+        position: absolute;
+        top: -11px;
+        left: 12px;
+        border-radius: 999px;
+        background: #fff1e5;
+        color: var(--accent);
+        padding: 4px 9px;
+        font: 700 0.72rem/1 "Trebuchet MS", sans-serif;
+        border: 1px solid #efc9b1;
+      }
+
+      .mobile-rail {
+        position: absolute;
+        inset: 0 0 0 auto;
+        width: 86%;
+        display: flex;
+        align-items: stretch;
+        pointer-events: none;
+      }
+
+      .mobile-rail-peek {
+        flex: 0 0 14%;
+        background: linear-gradient(90deg, rgba(245, 239, 230, 0) 0%, rgba(245, 239, 230, 0.52) 100%);
+      }
+
+      .mobile-rail-panel {
+        flex: 1 1 auto;
+        display: grid;
+        grid-template-rows: auto auto 1fr auto;
+        min-width: 0;
+        pointer-events: auto;
+        border-left: 1px solid rgba(215, 200, 183, 0.9);
+        border-radius: 24px 0 0 24px;
+        background:
+          linear-gradient(180deg, rgba(255, 251, 246, 0.92) 0%, rgba(252, 247, 240, 0.96) 100%);
+        backdrop-filter: blur(16px);
+        box-shadow: -16px 0 36px rgba(34, 24, 17, 0.12);
+      }
+
+      .mobile-rail-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 14px 14px 10px;
+        border-bottom: 1px solid rgba(215, 200, 183, 0.75);
+      }
+
+      .status-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: #2c8a52;
+      }
+
+      .mobile-status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        border: 1px solid #c9dfce;
+        background: rgba(236, 248, 240, 0.96);
+        color: #21663f;
+        padding: 6px 10px;
+        font: 700 0.76rem/1 "Trebuchet MS", sans-serif;
+      }
+
+      .close-chip {
+        width: 32px;
+        height: 32px;
+        border-radius: 999px;
+        border: 1px solid rgba(215, 200, 183, 0.9);
+        display: grid;
+        place-items: center;
+        color: var(--muted);
+        background: rgba(255, 255, 255, 0.7);
+        font-size: 1.2rem;
+      }
+
+      .mobile-summary {
+        margin: 10px 12px 0;
+        padding: 11px 12px;
+        border: 1px solid rgba(215, 200, 183, 0.9);
+        border-radius: 16px;
+        background: rgba(255, 248, 242, 0.94);
+      }
+
+      .mobile-summary-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+
+      .mini-kicker {
+        color: var(--accent);
+        font: 700 0.72rem/1 "Trebuchet MS", sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .linkish {
+        color: var(--accent);
+        font: 700 0.8rem/1 "Trebuchet MS", sans-serif;
+      }
+
+      .mobile-summary p {
+        color: #4b4039;
+        font-size: 0.9rem;
+        line-height: 1.4;
+      }
+
+      .mobile-thread {
+        padding: 12px;
+        display: grid;
+        gap: 10px;
+        align-content: start;
+      }
+
+      .bubble {
+        width: fit-content;
+        max-width: 100%;
+        padding: 10px 11px;
+        border-radius: 16px;
+        background: rgba(255, 255, 255, 0.92);
+        border: 1px solid rgba(215, 200, 183, 0.9);
+      }
+
+      .bubble.user {
+        margin-left: auto;
+        background: rgba(242, 234, 224, 0.94);
+      }
+
+      .bubble .who {
+        margin-bottom: 5px;
+        color: var(--accent);
+        font: 700 0.7rem/1 "Trebuchet MS", sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .bubble p {
+        font-size: 0.92rem;
+        line-height: 1.4;
+      }
+
+      .mobile-composer {
+        margin: 0 12px 12px;
+        padding: 10px 11px;
+        border: 1px solid rgba(215, 200, 183, 0.92);
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.95);
+      }
+
+      .mobile-context-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+
+      .mobile-input-row {
+        display: flex;
+        align-items: flex-end;
+        gap: 8px;
+      }
+
+      .mobile-input {
+        flex: 1 1 auto;
+        color: var(--muted);
+        line-height: 1.4;
+        font-size: 0.92rem;
+      }
+
+      .send-pill {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 44px;
+        height: 44px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: #fff7f1;
+        font: 700 0.8rem/1 "Trebuchet MS", sans-serif;
+      }
+
+      .phone-shell-tight {
+        min-height: 756px;
+        background:
+          linear-gradient(180deg, rgba(255, 252, 247, 0.98) 0%, rgba(247, 241, 233, 0.98) 100%);
+      }
+
+      .phone-doc-bar-tight {
+        margin-bottom: 10px;
+      }
+
+      .doc-meta-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        margin-top: 4px;
+        color: var(--muted);
+        font-size: 0.78rem;
+      }
+
+      .micro-pill {
+        display: inline-flex;
+        align-items: center;
+        min-height: 22px;
+        border-radius: 999px;
+        border: 1px solid #e8d7c7;
+        background: rgba(255, 252, 248, 0.92);
+        color: #7f6859;
+        padding: 0 8px;
+        font: 700 0.68rem/1 "Trebuchet MS", sans-serif;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .doc-meta-note {
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .pill-tight {
+        padding: 6px 10px;
+        font-size: 0.74rem;
+      }
+
+      .phone-doc-block-tight {
+        margin-bottom: 10px;
+        padding: 13px 14px;
+      }
+
+      .phone-doc-block-muted {
+        opacity: 0.88;
+      }
+
+      .mobile-rail-tight {
+        width: 89%;
+      }
+
+      .mobile-rail-tight .mobile-rail-peek {
+        flex-basis: 11%;
+        background: linear-gradient(90deg, rgba(245, 239, 230, 0) 0%, rgba(245, 239, 230, 0.38) 100%);
+      }
+
+      .mobile-rail-tight .mobile-rail-panel {
+        border-radius: 26px 0 0 26px;
+        background:
+          linear-gradient(180deg, rgba(255, 253, 249, 0.88) 0%, rgba(250, 246, 240, 0.94) 100%);
+        box-shadow: -12px 0 28px rgba(34, 24, 17, 0.08);
+      }
+
+      .mobile-rail-tight .mobile-rail-header {
+        padding: 10px 12px 8px;
+      }
+
+      .mobile-rail-tight .mobile-status {
+        padding: 5px 9px;
+        font-size: 0.72rem;
+      }
+
+      .mobile-rail-tight .close-chip {
+        width: 28px;
+        height: 28px;
+        font-size: 1rem;
+      }
+
+      .mobile-summary-tight {
+        display: grid;
+        grid-template-columns: auto 1fr auto;
+        align-items: center;
+        gap: 8px;
+        margin: 8px 12px 0;
+        padding: 8px 10px;
+        border-radius: 14px;
+      }
+
+      .mini-summary-text {
+        color: #5d4e45;
+        font-size: 0.82rem;
+        line-height: 1.25;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .mobile-thread-tight {
+        gap: 8px;
+        padding-top: 10px;
+      }
+
+      .bubble-soft {
+        padding: 9px 10px;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.86);
+        box-shadow: none;
+      }
+
+      .bubble-soft.user {
+        background: rgba(246, 239, 231, 0.9);
+      }
+
+      .bubble-soft p {
+        font-size: 0.88rem;
+      }
+
+      .mobile-composer-tight {
+        margin-top: 6px;
+        padding: 8px 10px;
+        border-radius: 16px;
+      }
+
+      .mobile-composer-tight .mobile-context-row {
+        margin-bottom: 6px;
+      }
+
+      .section-tag-tight {
+        padding: 6px 10px;
+        font-size: 0.74rem;
+      }
+
+      .send-pill-tight {
+        min-width: 40px;
+        height: 40px;
+        font-size: 0.74rem;
+      }
+
+      .thread-jump-card {
+        border: 1px solid rgba(215, 200, 183, 0.92);
+        border-radius: 14px;
+        background: rgba(255, 251, 246, 0.94);
+        padding: 10px 11px;
+      }
+
+      .thread-jump-top {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        margin-bottom: 6px;
+      }
+
+      .thread-jump-link {
+        color: var(--accent);
+        font: 700 0.76rem/1 "Trebuchet MS", sans-serif;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+      }
+
+      .jump-note {
+        color: #5c4f47;
+        font-size: 0.86rem;
+        line-height: 1.35;
+      }
+
+      .phone-doc-pending {
+        position: relative;
+        margin-top: 16px;
+        border: 1px solid rgba(196, 169, 142, 0.92);
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255, 251, 246, 0.98) 0%, rgba(253, 247, 240, 0.98) 100%);
+        box-shadow: inset 0 0 0 1px rgba(178, 76, 39, 0.05);
+        overflow: hidden;
+      }
+
+      .phone-doc-pending::before {
+        content: "";
+        position: absolute;
+        inset: 0 auto 0 0;
+        width: 3px;
+        background: rgba(178, 76, 39, 0.4);
+      }
+
+      .pending-topbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 10px 12px 8px;
+      }
+
+      .toggle-row {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 3px;
+        border: 1px solid rgba(224, 211, 197, 0.95);
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.9);
+      }
+
+      .toggle-pill {
+        min-height: 24px;
+        padding: 0 9px;
+        border-radius: 999px;
+        color: #7c6a5d;
+        font: 700 0.7rem/1 "Trebuchet MS", sans-serif;
+      }
+
+      .toggle-pill.active {
+        background: #f0dfd0;
+        color: var(--accent);
+      }
+
+      .pending-copy {
+        padding: 0 12px 12px;
+      }
+
+      .pending-copy h4 {
+        margin: 0 0 6px;
+        font-size: 0.98rem;
+      }
+
+      .pending-copy p {
+        color: #4b4039;
+        font-size: 0.9rem;
+        line-height: 1.45;
+      }
+
+      .pending-copy p + p {
+        margin-top: 8px;
+      }
+
+      .compare-slab {
+        margin-top: 10px;
+        border: 1px solid rgba(229, 217, 205, 0.96);
+        border-radius: 14px;
+        background: rgba(255, 255, 255, 0.78);
+        padding: 10px;
+      }
+
+      .compare-label {
+        margin-bottom: 6px;
+        color: #8a6a55;
+        font: 700 0.68rem/1 "Trebuchet MS", sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .compare-actions {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 12px 12px;
+      }
+
+      .mini-action {
+        display: inline-flex;
+        align-items: center;
+        min-height: 32px;
+        padding: 0 11px;
+        border-radius: 999px;
+        border: 1px solid rgba(215, 200, 183, 0.95);
+        background: rgba(255, 255, 255, 0.9);
+        color: #4e4036;
+        font: 700 0.76rem/1 "Trebuchet MS", sans-serif;
+      }
+
+      .mini-action.primary {
+        background: #b24c27;
+        border-color: #b24c27;
+        color: #fff8f2;
+      }
+
+      .phone-doc-grouped {
+        margin-top: 16px;
+        border: 1px dashed rgba(201, 179, 156, 0.92);
+        border-radius: 18px;
+        padding: 10px 12px 12px;
+        background: rgba(255, 251, 246, 0.62);
+      }
+
+      .grouped-caption {
+        margin-bottom: 8px;
+        color: #8a6a55;
+        font: 700 0.68rem/1 "Trebuchet MS", sans-serif;
+        letter-spacing: 0.05em;
+        text-transform: uppercase;
+      }
+
+      .grouped-stack {
+        display: grid;
+        gap: 8px;
+      }
+
       @media (max-width: 900px) {
         .layout-sidecar,
         .layout-split {
@@ -292,7 +856,7 @@
     <main>
       <section class="intro">
         <p class="label">Workshop UI Study</p>
-        <h1>Three plausible ways to keep the document as the center of gravity</h1>
+        <h1>Four plausible ways to keep the document as the center of gravity</h1>
         <p>
           These are deliberately low-fidelity. The goal is to choose the interaction model, not the visual polish.
           Each option assumes the same Barney/session underneath. The question is how the conversation stays tethered
@@ -301,6 +865,341 @@
       </section>
 
       <section class="grid">
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <p class="label">Option D</p>
+              <h2>Connected Overlay Rail</h2>
+            </div>
+            <p class="note">My current mobile direction: overlay the doc, but leave enough of it visible to stay oriented</p>
+          </div>
+          <div class="frame">
+            <div class="toolbar">
+              <div>
+                <div class="title">project-brief.md</div>
+                <div class="meta">Mobile behavior: discussion becomes a near-full overlay instead of a narrow sidebar</div>
+              </div>
+              <div class="pill">Phone-first</div>
+            </div>
+            <div class="phone-demo">
+              <div class="phone-shell">
+                <div class="phone-doc">
+                  <div class="phone-doc-bar">
+                    <div>
+                      <div class="phone-doc-title">project-brief.md</div>
+                      <div class="phone-doc-meta">Discussing “Problem / Opportunity”</div>
+                    </div>
+                    <div class="pill">Discuss</div>
+                  </div>
+
+                  <div class="phone-doc-block">
+                    <h3>Project framing</h3>
+                    <p>LoopKit has trust, traction, and deep technical credibility in a sensitive domain.</p>
+                  </div>
+
+                  <div class="phone-doc-block phone-focus">
+                    <h3>Problem / Opportunity</h3>
+                    <p>
+                      The current brief still opens too deep in implementation detail and underplays the outside-facing
+                      strategic story.
+                    </p>
+                    <p>
+                      It should lead with pain, stake, and why this team is unusually well positioned.
+                    </p>
+                  </div>
+
+                  <div class="phone-doc-block">
+                    <h3>Approach</h3>
+                    <p>The implementation detail remains below and is still obviously part of the same document.</p>
+                  </div>
+                </div>
+
+                <div class="mobile-rail">
+                  <div class="mobile-rail-peek"></div>
+                  <aside class="mobile-rail-panel">
+                    <div class="mobile-rail-header">
+                      <div class="mobile-status"><span class="status-dot"></span> Connected</div>
+                      <div class="close-chip">×</div>
+                    </div>
+
+                    <div class="mobile-summary">
+                      <div class="mobile-summary-top">
+                        <div class="mini-kicker">1 pending change</div>
+                        <div class="linkish">Review</div>
+                      </div>
+                      <p>Collapse proposal detail by default so the actual back-and-forth keeps most of the screen.</p>
+                    </div>
+
+                    <div class="mobile-thread">
+                      <div class="bubble user">
+                        <div class="who">Scott</div>
+                        <p>Can this feel more strategic and less implementation-first?</p>
+                      </div>
+                      <div class="bubble">
+                        <div class="who">Barney</div>
+                        <p>Yes. I’d rewrite the opening to lead with collaborator pain and only then earn the technical detail.</p>
+                      </div>
+                      <div class="bubble">
+                        <div class="who">Barney</div>
+                        <p>The visible document strip keeps the section anchored, but the rail now has enough width to actually breathe.</p>
+                      </div>
+                    </div>
+
+                    <div class="mobile-composer">
+                      <div class="mobile-context-row">
+                        <div class="section-tag">Problem / Opportunity</div>
+                        <div class="linkish">Reload</div>
+                      </div>
+                      <div class="mobile-input-row">
+                        <div class="mobile-input">Reply about this section…</div>
+                        <div class="send-pill">Send</div>
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="decision">
+            This keeps the connected-to-the-document feeling you like, but stops the mobile panel from pretending it is a desktop sidebar.
+            The key is to leave a narrow document reveal on the left while giving the discussion surface almost the full phone width.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <p class="label">Option D2</p>
+              <h2>Tightened Overlay Rail</h2>
+            </div>
+            <p class="note">Same structure, quieter chrome, lighter hierarchy, less visual bulk</p>
+          </div>
+          <div class="frame">
+            <div class="toolbar">
+              <div>
+                <div class="title">project-brief.md</div>
+                <div class="meta">Second pass: demote status, compress summary, calm the rail</div>
+              </div>
+              <div class="pill">Refined D</div>
+            </div>
+            <div class="phone-demo">
+              <div class="phone-shell phone-shell-tight">
+                <div class="phone-doc">
+                  <div class="phone-doc-bar phone-doc-bar-tight">
+                    <div>
+                      <div class="phone-doc-title">project-brief.md</div>
+                      <div class="doc-meta-row">
+                        <span class="micro-pill">1 pending</span>
+                        <span class="doc-meta-note">Last change: opening reframed for collaborator pain</span>
+                      </div>
+                    </div>
+                    <div class="pill pill-tight">Discuss</div>
+                  </div>
+
+                  <div class="phone-doc-block phone-doc-block-tight phone-doc-block-muted">
+                    <h3>Project framing</h3>
+                    <p>LoopKit has trust, traction, and strong credibility in a high-stakes domain.</p>
+                  </div>
+
+                  <div class="phone-doc-block phone-doc-block-tight phone-focus">
+                    <h3>Problem / Opportunity</h3>
+                    <p>
+                      The brief should lead with the outside-facing stake first and let the implementation depth arrive later.
+                    </p>
+                    <p>
+                      That keeps the document strategic without losing the technical substance underneath it.
+                    </p>
+                  </div>
+
+                  <div class="phone-doc-block phone-doc-block-tight phone-doc-block-muted">
+                    <h3>Approach</h3>
+                    <p>Implementation detail remains visible, but the reading flow feels lighter and more obviously primary.</p>
+                  </div>
+                </div>
+
+                <div class="mobile-rail mobile-rail-tight">
+                  <div class="mobile-rail-peek"></div>
+                  <aside class="mobile-rail-panel">
+                    <div class="mobile-rail-header">
+                      <div class="mobile-status"><span class="status-dot"></span> Connected</div>
+                      <div class="close-chip">×</div>
+                    </div>
+
+                    <div class="mobile-summary mobile-summary-tight">
+                      <div class="mini-kicker">1 change</div>
+                      <div class="mini-summary-text">Opening reframed around collaborator pain and strategic stake</div>
+                      <div class="linkish">Review</div>
+                    </div>
+
+                    <div class="mobile-thread mobile-thread-tight">
+                      <div class="bubble bubble-soft user">
+                        <div class="who">Scott</div>
+                        <p>Can this feel more strategic and less implementation-first?</p>
+                      </div>
+                      <div class="bubble bubble-soft">
+                        <div class="who">Barney</div>
+                        <p>Yes. The opening should earn the technical detail instead of leading with it.</p>
+                      </div>
+                      <div class="bubble bubble-soft">
+                        <div class="who">Barney</div>
+                        <p>The rail still feels attached to the document, but the UI is less shouty now.</p>
+                      </div>
+                    </div>
+
+                    <div class="mobile-composer mobile-composer-tight">
+                      <div class="mobile-context-row">
+                        <div class="section-tag section-tag-tight">Problem / Opportunity</div>
+                        <div class="linkish">Reload</div>
+                      </div>
+                      <div class="mobile-input-row">
+                        <div class="mobile-input">Reply about this section…</div>
+                        <div class="send-pill send-pill-tight">Send</div>
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="decision">
+            This is the same interaction model as D, but with the main-screen `pending` and revision state reduced to quiet document metadata
+            and the rail itself trimmed down so the chat feels calmer. My bias is that this is closer to the right tone.
+          </p>
+        </article>
+
+        <article class="card">
+          <div class="card-head">
+            <div>
+              <p class="label">Option D3</p>
+              <h2>Thread Summary + Inline Compare</h2>
+            </div>
+            <p class="note">Rail stays conversational; document becomes the true review surface</p>
+          </div>
+          <div class="frame">
+            <div class="toolbar">
+              <div>
+                <div class="title">project-brief.md</div>
+                <div class="meta">Third pass: tiny thread summary, light pending block, simple mobile compare</div>
+              </div>
+              <div class="pill">Document-first review</div>
+            </div>
+            <div class="phone-demo">
+              <div class="phone-shell phone-shell-tight">
+                <div class="phone-doc">
+                  <div class="phone-doc-bar phone-doc-bar-tight">
+                    <div>
+                      <div class="phone-doc-title">project-brief.md</div>
+                      <div class="doc-meta-row">
+                        <span class="micro-pill">1 pending set</span>
+                        <span class="doc-meta-note">Tap a thread summary to jump to the proposed area</span>
+                      </div>
+                    </div>
+                    <div class="pill pill-tight">Discuss</div>
+                  </div>
+
+                  <div class="phone-doc-block phone-doc-block-tight phone-doc-block-muted">
+                    <h3>Project framing</h3>
+                    <p>LoopKit has trust, traction, and strong technical credibility in a high-stakes domain.</p>
+                  </div>
+
+                  <div class="phone-doc-pending">
+                    <div class="pending-topbar">
+                      <span class="micro-pill">Pending</span>
+                      <div class="toggle-row">
+                        <span class="toggle-pill">Original</span>
+                        <span class="toggle-pill active">Proposed</span>
+                      </div>
+                    </div>
+                    <div class="pending-copy">
+                      <h4>Problem / Opportunity</h4>
+                      <p>
+                        The brief should open with collaborator pain and strategic stake, then let the technical depth arrive after the
+                        reader understands why this matters.
+                      </p>
+                      <p>
+                        That keeps the section feeling more strategic without making the implementation substance disappear.
+                      </p>
+
+                      <div class="compare-slab">
+                        <div class="compare-label">Original view</div>
+                        <p>The current opening leads too quickly with implementation detail and does not clearly frame the outside-facing opportunity.</p>
+                      </div>
+                    </div>
+                    <div class="compare-actions">
+                      <span class="mini-action primary">Accept</span>
+                      <span class="mini-action">Reject</span>
+                    </div>
+                  </div>
+
+                  <div class="phone-doc-block phone-doc-block-tight phone-doc-block-muted">
+                    <h3>Approach</h3>
+                    <p>The rest of the document still reads normally, with the proposed block feeling embedded rather than bolted on.</p>
+                  </div>
+
+                  <div class="phone-doc-grouped">
+                    <div class="grouped-caption">Possible v1 multi-change simplification</div>
+                    <div class="grouped-stack">
+                      <p>
+                        If one agent turn changes paragraph 2 and paragraph 4, v1 can treat that as one pending set with two light inline blocks,
+                        or even one grouped region if we need less state complexity.
+                      </p>
+                      <p>
+                        That avoids a GitHub-style diff experience while still keeping the review anchored inside the document.
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div class="mobile-rail mobile-rail-tight">
+                  <div class="mobile-rail-peek"></div>
+                  <aside class="mobile-rail-panel">
+                    <div class="mobile-rail-header">
+                      <div class="mobile-status"><span class="status-dot"></span> Connected</div>
+                      <div class="close-chip">×</div>
+                    </div>
+
+                    <div class="mobile-thread mobile-thread-tight">
+                      <div class="bubble bubble-soft user">
+                        <div class="who">Scott</div>
+                        <p>Can this feel more strategic and less implementation-first?</p>
+                      </div>
+
+                      <div class="thread-jump-card">
+                        <div class="thread-jump-top">
+                          <div class="who">Barney</div>
+                          <div class="thread-jump-link">Jump to change</div>
+                        </div>
+                        <div class="jump-note">Reframed the opening around collaborator pain and strategic stake. 1 proposed change set.</div>
+                      </div>
+
+                      <div class="bubble bubble-soft">
+                        <div class="who">Barney</div>
+                        <p>The document is now the real review surface, so the thread stays short and natural.</p>
+                      </div>
+                    </div>
+
+                    <div class="mobile-composer mobile-composer-tight">
+                      <div class="mobile-context-row">
+                        <div class="section-tag section-tag-tight">Problem / Opportunity</div>
+                        <div class="linkish">Reload</div>
+                      </div>
+                      <div class="mobile-input-row">
+                        <div class="mobile-input">Reply about this change…</div>
+                        <div class="send-pill send-pill-tight">Send</div>
+                      </div>
+                    </div>
+                  </aside>
+                </div>
+              </div>
+            </div>
+          </div>
+          <p class="decision">
+            My bias for v1 is: avoid paragraph-by-paragraph diff machinery. Keep one conversational thread entry per agent turn, jump into the
+            document, and let the document host light inline pending blocks with a simple `Original / Proposed` toggle. If multi-change turns happen,
+            group them as one change set unless there is a compelling reason to split them.
+          </p>
+        </article>
+
         <article class="card">
           <div class="card-head">
             <div>
