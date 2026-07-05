@@ -33,6 +33,10 @@ export function ReaderStatusBanner({
   onCycleProposal,
   onReloadDocument
 }: ReaderStatusBannerProps) {
+  const reviewStateChevron = reviewStateCycleLabel === '›'
+    ? <span className="reader-review-state-chevron" aria-hidden="true">›</span>
+    : reviewStateCycleLabel;
+
   return (
     <div className="reader-status-banner">
       {reviewStateLabel ? (
@@ -46,8 +50,8 @@ export function ReaderStatusBanner({
           >
             <span className="reader-review-dot" aria-hidden="true" />
             <span>{reviewStateLabel}</span>
-            {reviewStateCycleLabel ? (
-              <span className="reader-review-state-detail">{reviewStateCycleLabel}</span>
+            {reviewStateChevron ? (
+              <span className="reader-review-state-detail">{reviewStateChevron}</span>
             ) : null}
           </button>
         ) : (

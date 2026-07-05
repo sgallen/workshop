@@ -1,4 +1,5 @@
 import type { Artifact, RecentArtifact } from '../types.js';
+import { compareRecentArtifacts } from './recent-activity.js';
 
 export function buildDisplayedRecents(
   artifact: Pick<Artifact, 'title' | 'relativePath' | 'updatedAt'> | null,
@@ -39,7 +40,7 @@ export function buildDisplayedRecents(
       title: artifact.title,
       relativePath: artifact.relativePath,
       updatedAt: artifact.updatedAt,
-      lastOpenedAt: artifact.updatedAt,
+      lastOpenedAt: null,
       lastDiscussedAt: null,
       commentCount: activeCommentCount
     });
@@ -67,5 +68,5 @@ export function buildDisplayedRecents(
     }
   }
 
-  return seeded;
+  return seeded.sort(compareRecentArtifacts);
 }

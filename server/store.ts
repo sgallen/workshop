@@ -104,7 +104,12 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
       artifactEntry.updatedAt = artifactEntry.updatedAt ?? recent.updatedAt ?? null;
       artifactEntry.lastOpenedAt = artifactEntry.lastOpenedAt ?? recent.lastOpenedAt ?? null;
       artifactEntry.lastDiscussedAt = artifactEntry.lastDiscussedAt ?? recent.lastDiscussedAt ?? null;
-      artifactEntry.lastActivityAt = artifactEntry.lastActivityAt ?? recent.lastDiscussedAt ?? null;
+      artifactEntry.lastActivityAt =
+        artifactEntry.lastActivityAt
+        ?? recent.lastDiscussedAt
+        ?? recent.lastOpenedAt
+        ?? recent.updatedAt
+        ?? null;
     }
 
     delete store.recents;
@@ -112,12 +117,10 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
 
   function ensureArtifactMetadata(
     artifactEntry: ArtifactEntry,
-    artifact: RecentArtifactIdentity,
-    openedAt = new Date().toISOString()
+    artifact: RecentArtifactIdentity
   ): void {
     artifactEntry.title = artifact.title;
     artifactEntry.updatedAt = artifact.updatedAt ?? artifactEntry.updatedAt ?? null;
-    artifactEntry.lastOpenedAt = artifactEntry.lastOpenedAt ?? openedAt;
   }
 
   async function readStore(): Promise<Store> {
@@ -133,10 +136,30 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
     await fs.writeFile(dataFile, JSON.stringify(ensureStoreShape(store), null, 2));
   }
 
-  function touchRecentArtifact(store: Store, artifact: RecentArtifactIdentity): void {
+  function touchRecentArtifact(
+    store: Store,
+    artifact: RecentArtifactIdentity,
+    options?: { onlyIfUntracked?: boolean }
+  ): boolean {
     const openedAt = new Date().toISOString();
     const artifactEntry = getArtifactEntry(store, artifact.relativePath);
-    ensureArtifactMetadata(artifactEntry, artifact, openedAt);
+    ensureArtifactMetadata(artifactEntry, artifact);
+
+    const alreadyTracked = Boolean(
+      artifactEntry.lastActivityAt
+      || artifactEntry.lastDiscussedAt
+      || artifactEntry.lastOpenedAt
+      || artifactEntry.updatedAt
+      || artifactEntry.comments.length
+    );
+
+    if (options?.onlyIfUntracked && alreadyTracked) {
+      return false;
+    }
+
+    artifactEntry.lastOpenedAt = openedAt;
+    artifactEntry.lastActivityAt = openedAt;
+    return true;
   }
 
   function recordRecentDiscussion(
@@ -145,7 +168,7 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
     discussedAt = new Date().toISOString()
   ): void {
     const artifactEntry = getArtifactEntry(store, artifact.relativePath);
-    ensureArtifactMetadata(artifactEntry, artifact, discussedAt);
+    ensureArtifactMetadata(artifactEntry, artifact);
     artifactEntry.lastDiscussedAt = discussedAt;
     artifactEntry.lastActivityAt = discussedAt;
   }

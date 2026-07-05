@@ -1,5 +1,7 @@
 import { FormEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useState } from 'react';
 import { marked } from 'marked';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faPenToSquare } from '@fortawesome/free-regular-svg-icons';
 import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
 import type { Artifact, Comment, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
 import { formatRecentActivity } from './lib/formatting';
@@ -17,6 +19,8 @@ import {
 
 const DEFAULT_ARTIFACT_PATH = 'docs/project-brief.md';
 const COMPOSER_DRAFT_STORAGE_PREFIX = 'workshop:composer-draft:';
+const DRAFT_ARTIFACT_PATH = '__draft__/new-document.md';
+const DRAFT_ARTIFACT_TITLE = 'New document';
 const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
   {
     title: 'v0-technical-plan.md',
@@ -35,6 +39,23 @@ const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
     commentCount: 0
   }
 ];
+
+function buildDraftSeedMarkdown(title: string): string {
+  return `# ${title.trim()}\n`;
+}
+
+function createDraftArtifact(): Artifact {
+  return {
+    title: DRAFT_ARTIFACT_TITLE,
+    relativePath: DRAFT_ARTIFACT_PATH,
+    absolutePath: DRAFT_ARTIFACT_PATH,
+    updatedAt: new Date(0).toISOString(),
+    markdown: '',
+    renderedHtml: '',
+    comments: [],
+    sections: []
+  };
+}
 
 type ArtifactPayload = {
   artifact?: Artifact;
@@ -55,6 +76,14 @@ type AgentTurnPayload = ArtifactPayload & {
   }>;
 };
 
+function WorkshopWordmark() {
+  return (
+    <p className="workspace-brand-name" aria-label="Workshop">
+      Workshop
+    </p>
+  );
+}
+
 export function App() {
   const initialPath = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -65,6 +94,7 @@ export function App() {
   const composerFrameRef = useRef<HTMLFormElement | null>(null);
   const threadRef = useRef<HTMLDivElement | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  const draftTitleInputRef = useRef<HTMLInputElement | null>(null);
   const viewportMetricsRef = useRef({
     height: window.innerHeight,
     offsetTop: 0
@@ -96,8 +126,7 @@ export function App() {
   const [editBaseUpdatedAt, setEditBaseUpdatedAt] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editNotice, setEditNotice] = useState<string | null>(null);
-  const [createMode, setCreateMode] = useState(false);
-  const [createTitle, setCreateTitle] = useState('');
+  const [draftDocumentTitle, setDraftDocumentTitle] = useState('');
   const [creatingDocument, setCreatingDocument] = useState(false);
 
   function getComposerDraftStorageKey(path: string) {
@@ -157,12 +186,13 @@ export function App() {
   const attachedSection = attachedSectionId ? sectionById.get(attachedSectionId) ?? null : null;
   const conversationComments = artifact?.comments ?? [];
   const displayedConversationComments = pendingLocalComment ? [...conversationComments, pendingLocalComment] : conversationComments;
-  const resolvedArtifactPath = artifact?.relativePath ?? artifactPath;
+  const isDraftDocument = artifact?.relativePath === DRAFT_ARTIFACT_PATH;
+  const resolvedArtifactPath = isDraftDocument ? null : artifact?.relativePath ?? artifactPath;
   const showOverlay = menuOpen;
   const interactiveOverlay = menuOpen;
   const displayedRecentArtifacts = useMemo(() => {
-    return buildDisplayedRecents(artifact, recentArtifacts, conversationComments.length, DEMO_RECENT_CANDIDATES);
-  }, [artifact, recentArtifacts, conversationComments.length]);
+    return buildDisplayedRecents(isDraftDocument ? null : artifact, recentArtifacts, conversationComments.length, DEMO_RECENT_CANDIDATES);
+  }, [artifact, conversationComments.length, isDraftDocument, recentArtifacts]);
   const pendingProposalItems = useMemo(() => {
     return activeProposalSet?.items.filter((item) => item.status === 'pending') ?? [];
   }, [activeProposalSet]);
@@ -295,25 +325,19 @@ export function App() {
     : activeProposalSet
       ? 'Nudge this proposal closer...'
       : 'Kick off the next move...';
-  const isFreshDocument = useMemo(() => {
-    if (!artifact) {
-      return false;
-    }
-
-    const trimmedMarkdown = artifact.markdown.trim();
-    const headingOnlyMarkdown = artifact.sections.length === 1 ? artifact.sections[0]?.markdown.trim() ?? '' : '';
-
-    return (
-      displayedConversationComments.length === 0
-      && proposalHistory.length === 0
-      && trimmedMarkdown.length > 0
-      && trimmedMarkdown === headingOnlyMarkdown
-    );
-  }, [artifact, displayedConversationComments.length, proposalHistory.length]);
-  const hasUnsavedEditChanges = editMode && artifact ? editBody !== artifact.markdown : false;
+  const hasUnsavedEditChanges = editMode && artifact
+    ? isDraftDocument
+      ? Boolean(draftDocumentTitle.trim())
+      : editBody !== artifact.markdown
+    : false;
   const interactionLocked = loading || submitting || agentTurnPending || savingEdit || creatingDocument;
 
   useEffect(() => {
+    if (artifactPath === DRAFT_ARTIFACT_PATH) {
+      setLoading(false);
+      return;
+    }
+
     void loadArtifact(artifactPath);
   }, [artifactPath]);
 
@@ -566,15 +590,16 @@ export function App() {
     setPendingLocalComment(null);
     setEditBaseUpdatedAt(nextArtifact.updatedAt);
     setEditNotice(null);
-    setCreateMode(false);
-    setCreateTitle('');
+    setDraftDocumentTitle('');
     setAttachedSectionId((current) => (current && nextArtifact.sections.some((section) => section.id === current) ? current : null));
+    setArtifactPath(nextArtifact.relativePath);
 
     if (!editMode) {
       setEditBody(nextArtifact.markdown);
     }
 
     const params = new URLSearchParams(window.location.search);
+    params.delete('draft');
     params.set('path', nextArtifact.relativePath);
     window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
   }
@@ -596,6 +621,12 @@ export function App() {
 
   async function loadArtifact(nextPath: string, options?: { preserveCurrentOnError?: boolean }) {
     const preserveCurrentOnError = options?.preserveCurrentOnError ?? false;
+
+    if (nextPath === DRAFT_ARTIFACT_PATH) {
+      setLoading(false);
+      setError(null);
+      return;
+    }
 
     setLoading(true);
     setError(null);
@@ -711,6 +742,7 @@ export function App() {
     setLastLoadedUpdatedAt(null);
     setHasRemoteUpdate(false);
     setPendingLocalComment(null);
+    setDraftDocumentTitle('');
     setAttachedSectionId(null);
     setComposerBody('');
     setArtifactPath(normalizedPath);
@@ -720,7 +752,7 @@ export function App() {
     event.preventDefault();
     const body = composerBody.trim();
 
-    if (!body || interactionLocked || editMode) {
+    if (!body || interactionLocked || editMode || !resolvedArtifactPath) {
       return;
     }
 
@@ -791,7 +823,7 @@ export function App() {
   }
 
   async function handleReloadDocument() {
-    if (interactionLocked) {
+    if (interactionLocked || !resolvedArtifactPath) {
       return;
     }
 
@@ -808,26 +840,60 @@ export function App() {
       return;
     }
 
-    setCreateMode(true);
-    setCreateTitle('');
+    setArtifact(createDraftArtifact());
+    setArtifactPath(DRAFT_ARTIFACT_PATH);
+    setDraftDocumentTitle('');
+    setEditMode(false);
+    setEditBody('');
+    setEditBaseUpdatedAt(null);
+    setEditNotice(null);
+    setActiveProposalSet(null);
+    setProposalHistory([]);
+    setLastLoadedUpdatedAt(null);
+    setHasRemoteUpdate(false);
+    setPendingLocalComment(null);
+    setAttachedSectionId(null);
+    setComposerBody('');
+    setDraftPath(DEFAULT_ARTIFACT_PATH);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('path');
+    params.set('draft', 'new');
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    window.requestAnimationFrame(() => {
+      draftTitleInputRef.current?.focus();
+    });
+    setMenuOpen(false);
+    setRailOpen(false);
     setError(null);
   }
 
-  function handleCancelCreateDocument() {
-    if (creatingDocument) {
+  function handleCancelDraftDocument() {
+    if (creatingDocument || !isDraftDocument) {
       return;
     }
 
-    setCreateMode(false);
-    setCreateTitle('');
+    setArtifact(null);
+    setArtifactPath(DEFAULT_ARTIFACT_PATH);
+    setDraftDocumentTitle('');
+    setEditMode(false);
+    setEditBody('');
+    setEditBaseUpdatedAt(null);
+    setEditNotice(null);
+    setError(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete('draft');
+    params.set('path', DEFAULT_ARTIFACT_PATH);
+    window.history.replaceState({}, '', `${window.location.pathname}?${params.toString()}`);
+    void loadArtifact(DEFAULT_ARTIFACT_PATH);
   }
 
-  async function handleCreateDocument(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const title = createTitle.trim();
+  async function persistDraftDocument(markdown: string, options?: { openRail?: boolean }) {
+    const title = draftDocumentTitle.trim();
 
-    if (!title || interactionLocked || editMode) {
-      return;
+    if (!title) {
+      setError('Add a document title first.');
+      draftTitleInputRef.current?.focus();
+      return null;
     }
 
     setCreatingDocument(true);
@@ -840,7 +906,8 @@ export function App() {
           'Content-Type': 'application/json'
         },
         body: JSON.stringify({
-          title
+          title,
+          markdown
         })
       });
       const payload = await readJsonResponse<ArtifactPayload>(response);
@@ -850,12 +917,13 @@ export function App() {
       }
 
       applyArtifactPayload(payload);
-      setArtifactPath(payload.artifact.relativePath);
       setMenuOpen(false);
-      setRailOpen(false);
+      setRailOpen(Boolean(options?.openRail));
       void loadRecents();
+      return payload;
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to create document.');
+      return null;
     } finally {
       setCreatingDocument(false);
     }
@@ -863,6 +931,24 @@ export function App() {
 
   function handleEnterEditMode() {
     if (!artifact || interactionLocked) {
+      return;
+    }
+
+    if (isDraftDocument) {
+      const title = draftDocumentTitle.trim();
+
+      if (!title) {
+        setError('Add a document title first.');
+        draftTitleInputRef.current?.focus();
+        return;
+      }
+
+      setEditBody(buildDraftSeedMarkdown(title));
+      setEditBaseUpdatedAt(null);
+      setEditNotice(null);
+      setEditMode(true);
+      setRailOpen(false);
+      setMenuOpen(false);
       return;
     }
 
@@ -891,7 +977,34 @@ export function App() {
   }
 
   async function handleSaveEdit() {
-    if (!artifact || !editBaseUpdatedAt || interactionLocked) {
+    if (!artifact || interactionLocked) {
+      return;
+    }
+
+    if (isDraftDocument) {
+      const title = draftDocumentTitle.trim();
+
+      if (!title) {
+        setError('Add a document title first.');
+        draftTitleInputRef.current?.focus();
+        return;
+      }
+
+      const initialMarkdown = editBody.trim() ? editBody : buildDraftSeedMarkdown(title);
+      const payload = await persistDraftDocument(initialMarkdown);
+
+      if (!payload?.artifact) {
+        return;
+      }
+
+      setEditMode(false);
+      setEditBody(payload.artifact.markdown);
+      setEditBaseUpdatedAt(payload.artifact.updatedAt);
+      setEditNotice('Saved to document.');
+      return;
+    }
+
+    if (!editBaseUpdatedAt) {
       return;
     }
 
@@ -933,6 +1046,44 @@ export function App() {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to save edit.');
     } finally {
       setSavingEdit(false);
+    }
+  }
+
+  async function handleCreateBlankDraftDocument() {
+    if (interactionLocked || editMode) {
+      return;
+    }
+
+    const title = draftDocumentTitle.trim();
+
+    if (!title) {
+      setError('Add a document title first.');
+      draftTitleInputRef.current?.focus();
+      return;
+    }
+
+    await persistDraftDocument(buildDraftSeedMarkdown(title));
+  }
+
+  async function handleDiscussDraftDocument() {
+    if (interactionLocked || editMode) {
+      return;
+    }
+
+    const title = draftDocumentTitle.trim();
+
+    if (!title) {
+      setError('Add a document title first.');
+      draftTitleInputRef.current?.focus();
+      return;
+    }
+
+    const payload = await persistDraftDocument(buildDraftSeedMarkdown(title), { openRail: true });
+
+    if (payload?.artifact) {
+      window.requestAnimationFrame(() => {
+        composerRef.current?.focus();
+      });
     }
   }
 
@@ -983,7 +1134,7 @@ export function App() {
   }
 
   async function handleProposalMutation(endpoint: string) {
-    if (interactionLocked || editMode) {
+    if (interactionLocked || editMode || !resolvedArtifactPath) {
       return;
     }
 
@@ -1137,21 +1288,13 @@ export function App() {
     );
 
     return (
-      <div className="thread-event-row" key={proposalSet.id}>
+      <div className="thread-event-row" key={proposalSet.id} role="listitem">
         <div className="thread-event-log">
           {markerNote}
         </div>
       </div>
     );
   }
-
-  const showAgentConnectCard =
-    agentAuthLoading ||
-    !agentAuth ||
-    agentAuth.state === 'connecting' ||
-    agentAuth.state === 'expired' ||
-    agentAuth.state === 'error' ||
-    agentAuth.state === 'not_connected';
 
   return (
     <main className={`app-shell${menuOpen ? ' app-shell-menu-open' : ''}`}>
@@ -1171,10 +1314,7 @@ export function App() {
         >
           <div className="workspace-menu-header">
             <div className="workspace-brand-lockup">
-              <div className="workspace-logo-mark" aria-hidden="true">W</div>
-              <div className="workspace-brand-copy">
-                <p className="workspace-brand-name">Workshop</p>
-              </div>
+              <WorkshopWordmark />
             </div>
             <button
               className="workspace-menu-close"
@@ -1188,114 +1328,59 @@ export function App() {
           </div>
 
           <div className="workspace-menu-section workspace-menu-agent" role="region" aria-label="Agent controls">
-            <div className="workspace-menu-section-header">
-              <p className="section-label workspace-menu-label">Agent</p>
-            </div>
-
-            {showAgentConnectCard ? (
-              <div className="agent-status-card workspace-menu-agent-card">
-                <div className="agent-row agent-row-expanded" role="group" aria-label="Agent connection">
-                  <div className="agent-row-main">
-                    <span
-                      className={`discussion-rail-status${agentAuth?.state === 'connecting' ? ' discussion-rail-status-disconnected' : ''}`}
-                    >
+            <div
+              className={`workspace-agent-card workspace-agent-card-${agentAuth?.state === 'connected' ? 'connected' : agentAuth?.state === 'connecting' ? 'connecting' : 'disconnected'}`}
+            >
+              <div className="workspace-agent-card-row" role="group" aria-label="Agent connection">
+                <div className="workspace-agent-card-main">
+                  <span className="workspace-agent-badge">Agent</span>
+                  {agentAuth?.state === 'connecting' ? (
+                    <span className="discussion-rail-status discussion-rail-status-disconnected">
                       {renderDrawerAgentStatusLabel(agentAuth, agentAuthLoading)}
                     </span>
-                    <span className="agent-row-provider">Codex</span>
-                  </div>
-                  {agentAuth?.state !== 'connecting' ? (
-                    <button
-                      className="secondary-button compact-button discussion-header-button"
-                      type="button"
-                      onClick={() => void handleConnectAgent()}
-                      disabled={agentAuthLoading || interactionLocked}
-                    >
-                      {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
-                    </button>
                   ) : null}
                 </div>
-
-                {agentAuth?.state === 'connecting' ? (
-                  <div className="agent-connect-flow">
-                    <p className="agent-connect-copy">
-                      Open{' '}
-                      <a href={agentAuth.authUrl} target="_blank" rel="noreferrer">
-                        {agentAuth.authUrl ?? 'the device login page'}
-                      </a>{' '}
-                      and enter:
-                    </p>
-                    <p className="agent-device-code">{agentAuth.code ?? 'Waiting for code…'}</p>
-                    <p className="context-subtle">Workshop will notice once the login finishes.</p>
-                  </div>
-                ) : agentAuth?.message && !agentAuthLoading ? (
-                  <p className="agent-connect-copy context-subtle">{agentAuth.message}</p>
+                {agentAuth?.state === 'connected' ? (
+                  <button
+                    className="secondary-button compact-button workspace-agent-action"
+                    type="button"
+                    onClick={() => void handleDisconnectAgent()}
+                    disabled={agentAuthLoading || interactionLocked}
+                  >
+                    {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
+                  </button>
+                ) : agentAuth?.state !== 'connecting' ? (
+                  <button
+                    className="secondary-button compact-button workspace-agent-action"
+                    type="button"
+                    onClick={() => void handleConnectAgent()}
+                    disabled={agentAuthLoading || interactionLocked}
+                  >
+                    {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
+                  </button>
                 ) : null}
               </div>
-            ) : (
-              <div className="agent-row agent-row-compact" role="group" aria-label="Agent connection">
-                <div className="agent-row-main">
-                  <span className="discussion-rail-status discussion-rail-status-connected">
-                    {renderDrawerAgentStatusLabel(agentAuth, agentAuthLoading)}
-                  </span>
-                  <span className="agent-row-provider">{agentAuth?.accountLabel ?? 'Codex'}</span>
+
+              {agentAuth?.state === 'connecting' ? (
+                <div className="agent-connect-flow">
+                  <p className="agent-connect-copy">
+                    Open{' '}
+                    <a href={agentAuth.authUrl} target="_blank" rel="noreferrer">
+                      {agentAuth.authUrl ?? 'the device login page'}
+                    </a>{' '}
+                    and enter:
+                  </p>
+                  <p className="agent-device-code">{agentAuth.code ?? 'Waiting for code…'}</p>
+                  <p className="context-subtle">Workshop will notice once the login finishes.</p>
                 </div>
-                <button
-                  className="secondary-button compact-button discussion-header-button"
-                  type="button"
-                  onClick={() => void handleDisconnectAgent()}
-                  disabled={agentAuthLoading || interactionLocked}
-                >
-                  {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
-                </button>
-              </div>
-            )}
+              ) : null}
+            </div>
           </div>
 
           <div className="workspace-menu-section workspace-menu-recents" role="region" aria-label="Recent documents">
-            <div className="workspace-menu-section-header">
+            <div className="workspace-menu-section-header" role="group" aria-label="Recent documents header">
               <p className="section-label workspace-menu-label">Recents</p>
-              {!createMode ? (
-                <button
-                  className="secondary-button compact-button workspace-menu-create-button"
-                  type="button"
-                  disabled={interactionLocked}
-                  onClick={handleOpenCreateDocument}
-                >
-                  New document
-                </button>
-              ) : null}
             </div>
-
-            {createMode ? (
-              <form className="workspace-create-form" onSubmit={(event) => void handleCreateDocument(event)}>
-                <input
-                  className="path-input workspace-create-input"
-                  type="text"
-                  value={createTitle}
-                  disabled={interactionLocked}
-                  onChange={(event) => setCreateTitle(event.target.value)}
-                  placeholder="Document title"
-                  autoFocus
-                />
-                <div className="workspace-create-actions">
-                  <button
-                    className="secondary-button compact-button"
-                    type="button"
-                    disabled={creatingDocument}
-                    onClick={handleCancelCreateDocument}
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="primary-button compact-button workspace-create-submit"
-                    type="submit"
-                    disabled={!createTitle.trim() || interactionLocked}
-                  >
-                    {creatingDocument ? 'Creating…' : 'Create'}
-                  </button>
-                </div>
-              </form>
-            ) : null}
 
             {displayedRecentArtifacts.length > 0 ? (
               <div className="recent-list" role="list">
@@ -1304,6 +1389,7 @@ export function App() {
                     <button
                       key={recent.relativePath}
                       className="recent-item"
+                      role="listitem"
                       data-active={recent.relativePath === resolvedArtifactPath ? 'true' : 'false'}
                       type="button"
                       disabled={interactionLocked}
@@ -1323,15 +1409,29 @@ export function App() {
                 })}
               </div>
             ) : (
-              <p className="empty-thread workspace-menu-empty">
+              <p className="empty-thread workspace-menu-empty" role="status" aria-live="polite">
                 Create a new document or open another one and it will show up here for quick switching.
               </p>
             )}
+
+            <div className="workspace-menu-cta-dock">
+              <button
+                className="workspace-menu-cta"
+                type="button"
+                disabled={interactionLocked}
+                onClick={handleOpenCreateDocument}
+              >
+                <span className="workspace-menu-cta-icon" aria-hidden="true">
+                  <FontAwesomeIcon icon={faPenToSquare} />
+                </span>
+                <span className="workspace-menu-cta-title">Write</span>
+              </button>
+            </div>
           </div>
         </div>
       </aside>
 
-      <div className="app-frame">
+      <div className="app-frame" onPointerDown={artifact ? handleReaderSurfacePointerDown : undefined}>
         {!artifact ? (
           <section className="app-toolbar" aria-label="Document controls">
             <div className="toolbar-header-row">
@@ -1412,10 +1512,20 @@ export function App() {
                     </span>
                   </button>
                   <div className="reader-meta">
-                    <p className="reader-title">{artifact.title}</p>
+                    <p className="reader-title">{isDraftDocument ? (draftDocumentTitle.trim() || DRAFT_ARTIFACT_TITLE) : artifact.title}</p>
                   </div>
                 </div>
                 <div className="reader-actions" role="group" aria-label="Document actions">
+                  {isDraftDocument && !editMode ? (
+                    <button
+                      className="secondary-button compact-button reader-rail-button"
+                      type="button"
+                      disabled={interactionLocked}
+                      onClick={handleCancelDraftDocument}
+                    >
+                      Cancel
+                    </button>
+                  ) : null}
                   {editMode ? (
                     <>
                       <button
@@ -1429,14 +1539,14 @@ export function App() {
                       <button
                         className="primary-button compact-button action-primary-button proposal-review-button reader-rail-button"
                         type="button"
-                        disabled={interactionLocked || hasRemoteUpdate}
-                        title={hasRemoteUpdate ? 'Reload the document before saving your edit.' : undefined}
+                        disabled={interactionLocked || (!isDraftDocument && hasRemoteUpdate)}
+                        title={!isDraftDocument && hasRemoteUpdate ? 'Reload the document before saving your edit.' : undefined}
                         onClick={() => void handleSaveEdit()}
                       >
-                        {savingEdit ? 'Saving…' : 'Save'}
+                        {savingEdit ? (isDraftDocument ? 'Creating…' : 'Saving…') : (isDraftDocument ? 'Create' : 'Save')}
                       </button>
                     </>
-                  ) : (
+                  ) : !isDraftDocument ? (
                     <button
                       className="secondary-button compact-button reader-rail-button"
                       type="button"
@@ -1446,8 +1556,8 @@ export function App() {
                     >
                       Edit
                     </button>
-                  )}
-                  {!editMode ? (
+                  ) : null}
+                  {!editMode && !isDraftDocument ? (
                     <button
                       className="secondary-button compact-button reader-rail-button"
                       type="button"
@@ -1519,19 +1629,37 @@ export function App() {
                     data-busy={interactionLocked ? 'true' : 'false'}
                     aria-busy={interactionLocked ? 'true' : 'false'}
                   >
-                    {isFreshDocument ? (
-                      <div className="document-empty-state" role="status" aria-live="polite">
+                    {isDraftDocument ? (
+                      <div className="document-empty-state document-draft-state" role="status" aria-live="polite">
                         <p className="proposal-kicker">New document</p>
-                        <h2 className="document-empty-title">Start with a first line or ask for a first draft.</h2>
+                        <h2 className="document-empty-title">Name it here, then start writing or bring in the agent.</h2>
                         <p className="context-subtle document-empty-copy">
-                          This page is ready. Write directly in edit mode, or open the discussion rail and ask the agent to sketch an outline.
+                          Nothing is saved yet. Press Enter on the title to create a blank document, or keep going and save once the draft becomes real.
                         </p>
-                        <div className="document-empty-actions">
+                        <input
+                          ref={draftTitleInputRef}
+                          className="path-input draft-title-input"
+                          type="text"
+                          value={draftDocumentTitle}
+                          disabled={interactionLocked}
+                          onChange={(event) => setDraftDocumentTitle(event.target.value)}
+                          onKeyDown={(event) => {
+                            if (event.key === 'Enter' && !event.shiftKey) {
+                              event.preventDefault();
+                              void handleCreateBlankDraftDocument();
+                            }
+                          }}
+                          placeholder="Document title"
+                          autoFocus
+                        />
+                        <div
+                          className="document-empty-actions document-empty-actions-split"
+                          data-ready={draftDocumentTitle.trim() ? 'true' : 'false'}
+                        >
                           <button
                             className="primary-button compact-button action-primary-button"
                             type="button"
-                            disabled={interactionLocked || hasPendingProposal}
-                            title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
+                            disabled={interactionLocked || !draftDocumentTitle.trim()}
                             onClick={handleEnterEditMode}
                           >
                             Start writing
@@ -1539,11 +1667,8 @@ export function App() {
                           <button
                             className="secondary-button compact-button"
                             type="button"
-                            disabled={interactionLocked}
-                            onClick={() => {
-                              setMenuOpen(false);
-                              setRailOpen(true);
-                            }}
+                            disabled={interactionLocked || !draftDocumentTitle.trim()}
+                            onClick={() => void handleDiscussDraftDocument()}
                           >
                             Ask the agent
                           </button>
@@ -1629,7 +1754,7 @@ export function App() {
                     aria-busy={interactionLocked ? 'true' : 'false'}
                   >
                     {displayedConversationComments.length > 0 || agentTurnPending || proposalHistory.length > 0 ? (
-                      <div className="thread-list">
+                      <div className="thread-list" role="list">
                         {displayedConversationComments.map((comment) => {
                           const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
                           const isActiveProposalAnchor = activeProposalAnchorCommentId === comment.id;
@@ -1641,7 +1766,7 @@ export function App() {
 
                           return (
                             <div key={comment.id}>
-                              <div className="comment-row" data-author={comment.authorType}>
+                              <div className="comment-row" data-author={comment.authorType} role="listitem">
                                 <div
                                   className={`comment-thread${isActiveProposalAnchor ? ' comment-thread-active-proposal' : ''}`}
                                   data-author={comment.authorType}
@@ -1682,7 +1807,7 @@ export function App() {
                         })}
                         {unattachedProposalTimeline.map((proposalSet) => renderProposalTimelineMarker(proposalSet))}
                         {agentTurnPending ? (
-                          <div className="comment-row" data-author="agent">
+                          <div className="comment-row" data-author="agent" role="listitem">
                             <div className="comment-thread" data-author="agent">
                               <p role="status" aria-live="polite">
                                 {pendingTurnMessage}
@@ -1698,7 +1823,7 @@ export function App() {
                         <div aria-hidden="true" ref={threadEndRef} />
                       </div>
                     ) : (
-                      <p className="empty-thread">
+                      <p className="empty-thread" role="status" aria-live="polite">
                         {agentAuth?.state === 'connected'
                           ? 'Fresh bench. Start with the big move or a tiny fix.'
                           : 'Fresh bench. Connect the workshop flow from the menu if needed.'}

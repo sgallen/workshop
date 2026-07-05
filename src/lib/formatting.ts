@@ -1,3 +1,4 @@
+import { getRecentActivitySummary } from '../../core/recents/recent-activity';
 import type { RecentArtifact } from '../../core/types';
 
 function formatRecentDate(value: string): string {
@@ -17,12 +18,18 @@ export function formatArtifactTimestamp(value: string): string {
 }
 
 export function formatRecentActivity(recent: RecentArtifact): string {
-  if (recent.lastDiscussedAt) {
-    return `Discussed ${formatRecentDate(recent.lastDiscussedAt)}`;
+  const activity = getRecentActivitySummary(recent);
+
+  if (activity.kind === 'discussed' && activity.value) {
+    return `Discussed ${formatRecentDate(activity.value)}`;
   }
 
-  if (recent.lastOpenedAt) {
-    return `Opened ${formatRecentDate(recent.lastOpenedAt)}`;
+  if (activity.kind === 'opened' && activity.value) {
+    return `Opened ${formatRecentDate(activity.value)}`;
+  }
+
+  if (activity.kind === 'updated' && activity.value) {
+    return `Saved ${formatRecentDate(activity.value)}`;
   }
 
   return 'Recent document';

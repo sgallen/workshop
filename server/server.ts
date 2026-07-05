@@ -338,6 +338,12 @@ async function buildProposalMutationResult(
   };
 }
 
+async function syncArtifactRecency(store: Store, relativePath: string): Promise<void> {
+  const artifact = await loadArtifactPayload(relativePath);
+  artifactStore.touchRecentArtifact(store, artifact);
+  await artifactStore.writeStore(store);
+}
+
 function replaceSectionMarkdown(markdown: string, targetSection: Section, afterMarkdown: string): string {
   const lines = markdown.split('\n');
   const originalLines = lines.slice(targetSection.startLine - 1, targetSection.endLine);
@@ -536,8 +542,12 @@ app.get('/api/artifact', async (request: Request, response: Response) => {
   try {
     const artifact = await documentService.loadArtifact(String(request.query.path ?? ''));
     const currentStore = await artifactStore.readStore();
-    artifactStore.touchRecentArtifact(currentStore, artifact);
-    await artifactStore.writeStore(currentStore);
+    const registered = artifactStore.touchRecentArtifact(currentStore, artifact, { onlyIfUntracked: true });
+
+    if (registered) {
+      await artifactStore.writeStore(currentStore);
+    }
+
     response.json({
       artifact,
       proposalSet: getActiveProposalSet(currentStore, artifact.relativePath),
@@ -688,6 +698,7 @@ app.post('/api/comments', async (request: Request, response: Response) => {
 app.post('/api/artifact/create', async (request: Request, response: Response) => {
   const body = request.body as {
     title?: unknown;
+    markdown?: unknown;
   } | undefined;
 
   if (typeof body?.title !== 'string') {
@@ -709,6 +720,9 @@ app.post('/api/artifact/create', async (request: Request, response: Response) =>
     return;
   }
 
+  const normalizedTitle = title.replace(/[\r\n]+/g, ' ').replace(/\s+/g, ' ').trim();
+  const requestedMarkdown = typeof body.markdown === 'string' ? body.markdown : null;
+
   try {
     const requestedPath = path.posix.join(DEFAULT_CREATION_DIR, `${slug}.md`);
     const { absolutePath, relativePath } = await documentService.resolveArtifactPath(requestedPath);
@@ -721,7 +735,9 @@ app.post('/api/artifact/create', async (request: Request, response: Response) =>
       // Expected when creating a new document.
     }
 
-    const initialMarkdown = `# ${title}\n`;
+    const initialMarkdown = requestedMarkdown && requestedMarkdown.trim()
+      ? requestedMarkdown
+      : `# ${normalizedTitle}\n`;
     await fs.mkdir(path.dirname(absolutePath), { recursive: true });
     await fs.writeFile(absolutePath, initialMarkdown, { flag: 'wx' });
 
@@ -791,6 +807,7 @@ app.post('/api/artifact/save', async (request: Request, response: Response) => {
 
     appendRevision(currentStore, relativePath, revision);
     await writeDocumentAndStoreSafely(absolutePath, currentMarkdown, nextMarkdown, currentStore);
+    await syncArtifactRecency(currentStore, relativePath);
 
     const state = await buildProposalMutationResult(relativePath, revision);
     response.json(state);
@@ -952,6 +969,7 @@ app.post('/api/proposals/:proposalSetId/items/:proposalItemId/accept', async (re
 
     appendRevision(currentStore, relativePath, revision);
     await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, markdown, currentStore);
+    await syncArtifactRecency(currentStore, relativePath);
 
     response.json(await buildProposalMutationResult(relativePath, revision));
   } catch (error) {
@@ -1019,6 +1037,7 @@ app.post('/api/proposals/:proposalSetId/accept-all', async (request: Request, re
 
     appendRevision(currentStore, relativePath, revision);
     await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, latestMarkdown, currentStore);
+    await syncArtifactRecency(currentStore, relativePath);
 
     response.json(await buildProposalMutationResult(relativePath, revision));
   } catch (error) {
