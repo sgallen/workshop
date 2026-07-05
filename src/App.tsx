@@ -4,6 +4,9 @@ import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
 import type { Artifact, Comment, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
 import { formatRecentActivity } from './lib/formatting';
 import { readJsonResponse } from './lib/read-json-response';
+import { ProposalInlineCard } from './components/ProposalInlineCard';
+import { ProposalThreadFooter } from './components/ProposalThreadFooter';
+import { ReaderStatusBanner } from './components/ReaderStatusBanner';
 import {
   renderDrawerAgentActionLabel,
   renderDrawerAgentStatusLabel,
@@ -1068,7 +1071,7 @@ export function App() {
 
             {showAgentConnectCard ? (
               <div className="agent-status-card workspace-menu-agent-card">
-                <div className="agent-row agent-row-expanded">
+                <div className="agent-row agent-row-expanded" role="group" aria-label="Agent connection">
                   <div className="agent-row-main">
                     <span
                       className={`discussion-rail-status${agentAuth?.state === 'connecting' ? ' discussion-rail-status-disconnected' : ''}`}
@@ -1106,7 +1109,7 @@ export function App() {
                 ) : null}
               </div>
             ) : (
-              <div className="agent-row agent-row-compact">
+              <div className="agent-row agent-row-compact" role="group" aria-label="Agent connection">
                 <div className="agent-row-main">
                   <span className="discussion-rail-status discussion-rail-status-connected">
                     {renderDrawerAgentStatusLabel(agentAuth, agentAuthLoading)}
@@ -1295,70 +1298,23 @@ export function App() {
                 </div>
               </div>
               {activeProposalSet || hasRemoteUpdate || agentTurnPending || loading || editMode || editNotice ? (
-                <div className="reader-status-banner">
-                  {reviewStateLabel ? (
-                    reviewStateCanCycle ? (
-                      <button
-                        className="reader-review-state reader-review-state-button"
-                        type="button"
-                        disabled={interactionLocked || editMode}
-                        onClick={handleCycleProposalInDocument}
-                        title={
-                          activeProposalTargetSectionIds.length > 1
-                            ? 'Jump to the next pending change'
-                            : 'Jump to the pending change'
-                        }
-                      >
-                        <span className="reader-review-dot" aria-hidden="true" />
-                        <span>{reviewStateLabel}</span>
-                        {reviewStateCycleLabel ? (
-                          <span className="reader-review-state-detail">{reviewStateCycleLabel}</span>
-                        ) : null}
-                      </button>
-                    ) : (
-                      <p className="reader-review-state" role="status" aria-live="polite">
-                        <span className="reader-review-dot" aria-hidden="true" />
-                        <span>{reviewStateLabel}</span>
-                      </p>
-                    )
-                  ) : null}
-                  {!reviewStateLabel && loading ? (
-                    <p className="reader-review-state" role="status" aria-live="polite">
-                      <span className="reader-review-dot reader-review-dot-info" aria-hidden="true" />
-                      <span>Refreshing document…</span>
-                    </p>
-                  ) : null}
-                  {!reviewStateLabel && agentTurnPending ? (
-                    <p className="reader-review-state" role="status" aria-live="polite">
-                      <span className="reader-review-dot reader-review-dot-info" aria-hidden="true" />
-                      <span>{pendingTurnMessage}</span>
-                    </p>
-                  ) : null}
-                  {editMode ? (
-                    <p className="reader-review-state" role="status" aria-live="polite">
-                      <span className="reader-review-dot reader-review-dot-info" aria-hidden="true" />
-                      <span>{hasUnsavedEditChanges ? 'Editing with unsaved changes' : 'Editing'}</span>
-                    </p>
-                  ) : null}
-                  {editNotice ? (
-                    <p className="reader-review-state" role="status" aria-live="polite">
-                      <span className="reader-review-dot" aria-hidden="true" />
-                      <span>{editNotice}</span>
-                    </p>
-                  ) : null}
-                  {hasRemoteUpdate ? (
-                    <div className="reader-meta-pills reader-meta-pills-compact">
-                      <span className={`meta-pill${hasStalePendingProposals ? ' meta-pill-warning' : ' meta-pill-info'}`}>
-                        {editMode ? 'Reload required before save' : hasStalePendingProposals ? 'Reload required before apply' : 'Changed on disk'}
-                      </span>
-                    </div>
-                  ) : null}
-                  {hasRemoteUpdate ? (
-                    <button className="text-button" type="button" disabled={interactionLocked} onClick={() => void handleReloadDocument()}>
-                      {loading ? 'Reloading…' : 'Reload'}
-                    </button>
-                  ) : null}
-                </div>
+                <ReaderStatusBanner
+                  reviewStateLabel={reviewStateLabel}
+                  reviewStateCanCycle={reviewStateCanCycle}
+                  reviewStateCycleLabel={reviewStateCycleLabel}
+                  reviewTargetCount={activeProposalTargetSectionIds.length}
+                  interactionLocked={interactionLocked}
+                  editMode={editMode}
+                  loading={loading}
+                  agentTurnPending={agentTurnPending}
+                  pendingTurnMessage={pendingTurnMessage}
+                  hasUnsavedEditChanges={hasUnsavedEditChanges}
+                  editNotice={editNotice}
+                  hasRemoteUpdate={hasRemoteUpdate}
+                  hasStalePendingProposals={hasStalePendingProposals}
+                  onCycleProposal={handleCycleProposalInDocument}
+                  onReloadDocument={handleReloadDocument}
+                />
               ) : null}
             </header>
 
@@ -1420,68 +1376,19 @@ export function App() {
                               dangerouslySetInnerHTML={{ __html: section.renderedHtml }}
                             />
                           ) : (
-                            <div className="proposal-inline-block" data-stale={hasStalePendingProposals ? 'true' : 'false'}>
-                              <div className="proposal-inline-topbar">
-                              <div className="proposal-compare-toggle" role="group" aria-label="Compare proposal versions">
-                                  <button
-                                    className={`proposal-toggle-button${proposalCompareMode === 'original' ? ' proposal-toggle-button-active' : ''}`}
-                                    type="button"
-                                    disabled={interactionLocked}
-                                    aria-pressed={proposalCompareMode === 'original'}
-                                    onClick={() => setProposalCompareModeById((current) => ({ ...current, [proposalItem.id]: 'original' }))}
-                                  >
-                                    Original
-                                  </button>
-                                  <button
-                                    className={`proposal-toggle-button${proposalCompareMode === 'proposed' ? ' proposal-toggle-button-active' : ''}`}
-                                    type="button"
-                                    disabled={interactionLocked}
-                                    aria-pressed={proposalCompareMode === 'proposed'}
-                                    onClick={() => setProposalCompareModeById((current) => ({ ...current, [proposalItem.id]: 'proposed' }))}
-                                  >
-                                    Proposed
-                                  </button>
-                                </div>
-                              </div>
-                              <div className="proposal-inline-body">
-                                <div
-                                  className="section-rendered proposal-inline-rendered"
-                                  dangerouslySetInnerHTML={{ __html: proposalRenderedHtml ?? '' }}
-                                />
-                              </div>
-                              <div
-                                className="proposal-actions proposal-actions-inline proposal-actions-inline-document"
-                                role="group"
-                                aria-label="Proposal actions"
-                              >
-                                  <button
-                                    className="secondary-button compact-button proposal-review-button"
-                                    type="button"
-                                    disabled={interactionLocked}
-                                    onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/dismiss`)}
-                                  >
-                                    Reject
-                                  </button>
-                                  <button
-                                    className="primary-button compact-button action-primary-button proposal-review-button"
-                                    type="button"
-                                    disabled={interactionLocked || hasStalePendingProposals}
-                                    title={hasStalePendingProposals ? 'Reload the document before accepting this proposal.' : undefined}
-                                    onClick={() => void handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/accept`)}
-                                  >
-                                  Accept
-                                </button>
-                              </div>
-                              {hasStalePendingProposals ? (
-                                <div className="proposal-inline-status" role="status" aria-live="polite">
-                                  <span className="status-pill status-pill-warning">Reload required</span>
-                                  <span className="context-subtle">Reload the document before accepting this proposal.</span>
-                                  <button className="text-button" type="button" disabled={interactionLocked} onClick={() => void handleReloadDocument()}>
-                                    {loading ? 'Reloading…' : 'Reload'}
-                                  </button>
-                                </div>
-                              ) : null}
-                            </div>
+                            <ProposalInlineCard
+                              proposalItemId={proposalItem.id}
+                              proposalSetId={activeProposalSet?.id ?? null}
+                              proposalCompareMode={proposalCompareMode ?? 'proposed'}
+                              proposalRenderedHtml={proposalRenderedHtml ?? ''}
+                              interactionLocked={interactionLocked}
+                              hasStalePendingProposals={hasStalePendingProposals}
+                              loading={loading}
+                              onSetCompareMode={(mode) => setProposalCompareModeById((current) => ({ ...current, [proposalItem.id]: mode }))}
+                              onReject={() => handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/dismiss`)}
+                              onAccept={() => handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/accept`)}
+                              onReloadDocument={handleReloadDocument}
+                            />
                           )}
 
                         </article>
@@ -1520,6 +1427,8 @@ export function App() {
                   <div
                     className="discussion-thread"
                     ref={threadRef}
+                    role="region"
+                    aria-label="Discussion thread"
                     aria-busy={interactionLocked ? 'true' : 'false'}
                   >
                     {displayedConversationComments.length > 0 || agentTurnPending || proposalHistory.length > 0 ? (
@@ -1558,57 +1467,15 @@ export function App() {
                                   ) : null}
                                   <p>{comment.body}</p>
                                   {isActiveProposalAnchor && activeProposalSet ? (
-                                    <div className="proposal-thread-footer">
-                                      {activeProposalTargetSummary ? (
-                                        <p className="context-subtle">{activeProposalTargetSummary}</p>
-                                      ) : null}
-                                      <div
-                                        className="proposal-actions proposal-actions-inline proposal-actions-inline-document proposal-thread-actions"
-                                        role="group"
-                                        aria-label="Proposal actions"
-                                      >
-                                        <button
-                                          className="secondary-button compact-button proposal-review-button"
-                                          type="button"
-                                          disabled={interactionLocked}
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`);
-                                          }}
-                                        >
-                                          Reject
-                                        </button>
-                                        <button
-                                          className="primary-button compact-button action-primary-button proposal-review-button"
-                                          type="button"
-                                          disabled={interactionLocked || hasStalePendingProposals}
-                                          title={hasStalePendingProposals ? 'Reload the document before accepting these changes.' : undefined}
-                                          onClick={(event) => {
-                                            event.stopPropagation();
-                                            void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/accept-all`);
-                                          }}
-                                        >
-                                          Accept
-                                        </button>
-                                      </div>
-                                      {hasStalePendingProposals ? (
-                                        <div className="proposal-inline-status" role="status" aria-live="polite">
-                                          <span className="status-pill status-pill-warning">Reload required</span>
-                                          <span className="context-subtle">Reload before accepting these changes.</span>
-                                          <button
-                                            className="text-button"
-                                            type="button"
-                                            disabled={interactionLocked}
-                                            onClick={(event) => {
-                                              event.stopPropagation();
-                                              void handleReloadDocument();
-                                            }}
-                                          >
-                                            {loading ? 'Reloading…' : 'Reload'}
-                                          </button>
-                                        </div>
-                                      ) : null}
-                                    </div>
+                                    <ProposalThreadFooter
+                                      activeProposalTargetSummary={activeProposalTargetSummary}
+                                      interactionLocked={interactionLocked}
+                                      hasStalePendingProposals={hasStalePendingProposals}
+                                      loading={loading}
+                                      onReject={() => handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`)}
+                                      onAccept={() => handleProposalMutation(`/api/proposals/${activeProposalSet.id}/accept-all`)}
+                                      onReloadDocument={handleReloadDocument}
+                                    />
                                   ) : null}
                                 </div>
                               </div>
@@ -1639,6 +1506,8 @@ export function App() {
                     className="discussion-composer"
                     onSubmit={(event) => void handleComposerSubmit(event)}
                     ref={composerFrameRef}
+                    role="group"
+                    aria-label="Discussion composer"
                     aria-busy={interactionLocked ? 'true' : 'false'}
                   >
                     {hasRemoteUpdate ? (
