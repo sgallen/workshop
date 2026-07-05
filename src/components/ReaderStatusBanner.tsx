@@ -66,7 +66,14 @@ export function ReaderStatusBanner({
       {!reviewStateLabel && agentTurnPending ? (
         <p className="reader-review-state" role="status" aria-live="polite">
           <span className="reader-review-dot reader-review-dot-info" aria-hidden="true" />
-          <span>{pendingTurnMessage}</span>
+          <span>
+            {pendingTurnMessage}
+            <span className="pending-ellipsis" aria-hidden="true">
+              <span>.</span>
+              <span>.</span>
+              <span>.</span>
+            </span>
+          </span>
         </p>
       ) : null}
       {editMode ? (

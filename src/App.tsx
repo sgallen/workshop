@@ -1464,7 +1464,6 @@ export function App() {
                     <button
                       className="workspace-menu-close"
                       type="button"
-                      disabled={interactionLocked}
                       onClick={() => setRailOpen(false)}
                       aria-label="Close discussion"
                     >
@@ -1535,7 +1534,14 @@ export function App() {
                         {agentTurnPending ? (
                           <div className="comment-row" data-author="agent">
                             <div className="comment-thread" data-author="agent">
-                              <p role="status" aria-live="polite">{pendingTurnMessage}</p>
+                              <p role="status" aria-live="polite">
+                                {pendingTurnMessage}
+                                <span className="pending-ellipsis" aria-hidden="true">
+                                  <span>.</span>
+                                  <span>.</span>
+                                  <span>.</span>
+                                </span>
+                              </p>
                             </div>
                           </div>
                         ) : null}
@@ -1592,7 +1598,13 @@ export function App() {
                         disabled={interactionLocked}
                         aria-label={interactionLocked ? 'Sending message' : 'Send message'}
                       >
-                        {interactionLocked ? '...' : '➤'}
+                        {interactionLocked ? (
+                          <span className="pending-ellipsis pending-ellipsis-compact" aria-hidden="true">
+                            <span>.</span>
+                            <span>.</span>
+                            <span>.</span>
+                          </span>
+                        ) : '➤'}
                       </button>
                     </div>
                   </form>
