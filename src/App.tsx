@@ -163,7 +163,6 @@ export function App() {
     );
   }, [pendingProposalItems]);
   const pendingProposalCount = pendingProposalItems.length;
-  const activeProposalVersion = activeProposalSet?.version ?? 1;
   const activeProposalAnchorCommentId = useMemo(() => {
     if (!activeProposalSet) {
       return null;
@@ -224,10 +223,61 @@ export function App() {
       : 'Reviewing the document…';
   const hasStalePendingProposals = hasRemoteUpdate && pendingProposalItems.length > 0;
   const reviewStateLabel = activeProposalSet
-    ? activeProposalVersion > 1
-      ? 'In review: updated proposal'
-      : `In review: ${pendingProposalCount} pending ${pendingProposalCount === 1 ? 'change' : 'changes'}`
+    ? `${pendingProposalCount} ${pendingProposalCount === 1 ? 'change' : 'changes'}`
     : null;
+  const activeProposalTargetSectionIds = useMemo(() => {
+    if (!activeProposalSet) {
+      return [];
+    }
+
+    const sectionScopedItems = pendingProposalItems.length > 0 ? pendingProposalItems : activeProposalSet.items;
+    const ids: string[] = [];
+    const seen = new Set<string>();
+
+    for (const item of sectionScopedItems) {
+      if (!item.sectionId || seen.has(item.sectionId)) {
+        continue;
+      }
+
+      seen.add(item.sectionId);
+      ids.push(item.sectionId);
+    }
+
+    if (ids.length === 0 && activeProposalSet.focusedSectionId) {
+      ids.push(activeProposalSet.focusedSectionId);
+    }
+
+    return ids;
+  }, [activeProposalSet, pendingProposalItems]);
+  const activeProposalTargetSections = useMemo(() => {
+    return activeProposalTargetSectionIds
+      .map((sectionId) => sectionById.get(sectionId) ?? null)
+      .filter((section): section is NonNullable<typeof section> => section !== null);
+  }, [activeProposalTargetSectionIds, sectionById]);
+  const activeProposalPrimarySectionId =
+    activeProposalTargetSectionIds[0] ?? activeProposalSet?.focusedSectionId ?? pendingProposalItems[0]?.sectionId ?? null;
+  const activeProposalSpansMultipleSections = activeProposalTargetSections.length > 1;
+  const activeProposalContextLabel = activeProposalSpansMultipleSections
+    ? `${activeProposalTargetSections.length} sections`
+    : activeProposalTargetSections[0]?.headingText ?? null;
+  const activeProposalTargetSummary = activeProposalSpansMultipleSections
+    ? activeProposalTargetSections.map((section) => section.headingText).join(', ')
+    : null;
+  const activeProposalReviewIndex = useMemo(() => {
+    if (!attachedSectionId) {
+      return -1;
+    }
+
+    return activeProposalTargetSectionIds.indexOf(attachedSectionId);
+  }, [activeProposalTargetSectionIds, attachedSectionId]);
+  const reviewStateCanCycle = activeProposalTargetSectionIds.length > 0;
+  const reviewStateCycleLabel = activeProposalTargetSectionIds.length > 1
+    ? activeProposalReviewIndex >= 0
+      ? `${activeProposalReviewIndex + 1}/${activeProposalTargetSectionIds.length}`
+      : '›'
+    : activeProposalTargetSectionIds.length === 1
+      ? '›'
+      : null;
   const composerPlaceholder = attachedSection
     ? `Sharpen ${attachedSection.headingText}...`
     : activeProposalSet
@@ -871,7 +921,19 @@ export function App() {
   }
 
   function handleOpenProposalInDocument() {
-    handleFocusProposalSection(activeProposalSet?.focusedSectionId ?? pendingProposalItems[0]?.sectionId ?? null);
+    handleFocusProposalSection(activeProposalPrimarySectionId);
+  }
+
+  function handleCycleProposalInDocument() {
+    if (!reviewStateCanCycle || interactionLocked || editMode) {
+      return;
+    }
+
+    const nextIndex = activeProposalReviewIndex >= 0
+      ? (activeProposalReviewIndex + 1) % activeProposalTargetSectionIds.length
+      : 0;
+
+    handleFocusProposalSection(activeProposalTargetSectionIds[nextIndex] ?? null);
   }
 
   function handleDismissPanels() {
@@ -1235,10 +1297,30 @@ export function App() {
               {activeProposalSet || hasRemoteUpdate || agentTurnPending || loading || editMode || editNotice ? (
                 <div className="reader-status-banner">
                   {reviewStateLabel ? (
-                    <p className="reader-review-state" role="status" aria-live="polite">
-                      <span className="reader-review-dot" aria-hidden="true" />
-                      <span>{reviewStateLabel}</span>
-                    </p>
+                    reviewStateCanCycle ? (
+                      <button
+                        className="reader-review-state reader-review-state-button"
+                        type="button"
+                        disabled={interactionLocked || editMode}
+                        onClick={handleCycleProposalInDocument}
+                        title={
+                          activeProposalTargetSectionIds.length > 1
+                            ? 'Jump to the next pending change'
+                            : 'Jump to the pending change'
+                        }
+                      >
+                        <span className="reader-review-dot" aria-hidden="true" />
+                        <span>{reviewStateLabel}</span>
+                        {reviewStateCycleLabel ? (
+                          <span className="reader-review-state-detail">{reviewStateCycleLabel}</span>
+                        ) : null}
+                      </button>
+                    ) : (
+                      <p className="reader-review-state" role="status" aria-live="polite">
+                        <span className="reader-review-dot" aria-hidden="true" />
+                        <span>{reviewStateLabel}</span>
+                      </p>
+                    )
                   ) : null}
                   {!reviewStateLabel && loading ? (
                     <p className="reader-review-state" role="status" aria-live="polite">
@@ -1367,7 +1449,11 @@ export function App() {
                                   dangerouslySetInnerHTML={{ __html: proposalRenderedHtml ?? '' }}
                                 />
                               </div>
-                              <div className="proposal-actions proposal-actions-inline proposal-actions-inline-document">
+                              <div
+                                className="proposal-actions proposal-actions-inline proposal-actions-inline-document"
+                                role="group"
+                                aria-label="Proposal actions"
+                              >
                                   <button
                                     className="secondary-button compact-button proposal-review-button"
                                     type="button"
@@ -1442,6 +1528,10 @@ export function App() {
                           const commentSection = comment.sectionId ? sectionById.get(comment.sectionId) ?? null : null;
                           const isActiveProposalAnchor = activeProposalAnchorCommentId === comment.id;
                           const anchoredProposalTimeline = proposalTimelineByAnchorCommentId.get(comment.id) ?? [];
+                          const proposalContextLabel = isActiveProposalAnchor
+                            ? activeProposalContextLabel
+                            : commentSection?.headingText ?? null;
+                          const jumpLabel = activeProposalSpansMultipleSections ? 'Jump to changes' : 'Jump to change';
 
                           return (
                             <div key={comment.id}>
@@ -1451,9 +1541,9 @@ export function App() {
                                   data-author={comment.authorType}
                                   data-active-proposal={isActiveProposalAnchor ? 'true' : 'false'}
                                 >
-                                  {commentSection || isActiveProposalAnchor ? (
+                                  {proposalContextLabel || isActiveProposalAnchor ? (
                                     <div className="comment-thread-header">
-                                      {commentSection ? <p className="comment-context comment-context-tight">{commentSection.headingText}</p> : <span />}
+                                      {proposalContextLabel ? <p className="comment-context comment-context-tight">{proposalContextLabel}</p> : <span />}
                                       {isActiveProposalAnchor ? (
                                         <button
                                           className="text-button text-button-muted comment-jump-link"
@@ -1461,7 +1551,7 @@ export function App() {
                                           disabled={interactionLocked}
                                           onClick={handleOpenProposalInDocument}
                                         >
-                                          Jump to change
+                                          {jumpLabel}
                                         </button>
                                       ) : null}
                                     </div>
@@ -1469,7 +1559,14 @@ export function App() {
                                   <p>{comment.body}</p>
                                   {isActiveProposalAnchor && activeProposalSet ? (
                                     <div className="proposal-thread-footer">
-                                      <div className="proposal-actions proposal-actions-inline proposal-actions-inline-document proposal-thread-actions">
+                                      {activeProposalTargetSummary ? (
+                                        <p className="context-subtle">{activeProposalTargetSummary}</p>
+                                      ) : null}
+                                      <div
+                                        className="proposal-actions proposal-actions-inline proposal-actions-inline-document proposal-thread-actions"
+                                        role="group"
+                                        aria-label="Proposal actions"
+                                      >
                                         <button
                                           className="secondary-button compact-button proposal-review-button"
                                           type="button"

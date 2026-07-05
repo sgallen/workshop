@@ -309,6 +309,29 @@ textarea.path-input {
   line-height: 1.35;
 }
 
+.reader-review-state-button {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+.reader-review-state-button:hover {
+  color: var(--accent-strong);
+}
+
+.reader-review-state-button:disabled {
+  cursor: default;
+}
+
+.reader-review-state-detail {
+  color: color-mix(in srgb, var(--accent-strong) 78%, #ffffff 22%);
+  font-size: 0.75rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
 .reader-review-dot {
   width: 7px;
   height: 7px;
