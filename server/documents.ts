@@ -93,6 +93,7 @@ export function createDocumentService(options: DocumentServiceOptions) {
       relativePath,
       absolutePath,
       updatedAt: stats.mtime.toISOString(),
+      markdown,
       renderedHtml: marked.parse(markdown) as string,
       comments,
       sections: sections.map((section) => ({

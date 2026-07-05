@@ -198,18 +198,42 @@ function upsertActiveProposalSet(
   proposal: {
     summary: string;
     rationale: string;
-    targetSectionId: string;
-    afterMarkdown: string;
+    items: Array<{
+      summary: string;
+      targetSectionId: string;
+      afterMarkdown: string;
+    }>;
   }
 ): ProposalSetRecord | null {
-  const targetSection = artifact.sections.find((section) => section.id === proposal.targetSectionId);
-  const afterMarkdown = proposal.afterMarkdown.trim();
+  const validItems = proposal.items.flatMap((item) => {
+    const targetSection = artifact.sections.find((section) => section.id === item.targetSectionId);
+    const afterMarkdown = item.afterMarkdown.trim();
 
-  if (!targetSection || !afterMarkdown) {
+    if (!targetSection || !afterMarkdown) {
+      return [];
+    }
+
+    return [{
+      targetSection,
+      afterMarkdown,
+      summary: item.summary.trim() || `Update ${targetSection.headingText}`
+    }];
+  });
+
+  if (validItems.length === 0) {
     return null;
   }
 
-  const summary = proposal.summary.trim() || `Update ${targetSection.headingText}`;
+  const dedupedItems = validItems.filter((item, index, items) => {
+    return items.findIndex((candidate) => candidate.targetSection.id === item.targetSection.id) === index;
+  });
+  const uniqueSectionIds = dedupedItems.map((item) => item.targetSection.id);
+  const summary = proposal.summary.trim()
+    || (dedupedItems.length === 1
+      ? dedupedItems[0].summary
+      : `Update ${dedupedItems.length} sections`);
+  const scope = uniqueSectionIds.length === 1 ? 'section' : 'mixed';
+  const focusedSectionId = uniqueSectionIds.length === 1 ? uniqueSectionIds[0] : null;
   const existingActiveProposal = getActiveProposalSet(store, relativePath);
 
   if (existingActiveProposal) {
@@ -219,12 +243,18 @@ function upsertActiveProposalSet(
     existingActiveProposal.version = (existingActiveProposal.version ?? 1) + 1;
     existingActiveProposal.summary = summary;
     existingActiveProposal.rationale = proposal.rationale.trim();
-    existingActiveProposal.scope = 'section';
-    existingActiveProposal.focusedSectionId = targetSection.id;
+    existingActiveProposal.scope = scope;
+    existingActiveProposal.focusedSectionId = focusedSectionId;
     existingActiveProposal.createdAt = agentCreatedAt;
-    existingActiveProposal.items = [
-      buildPendingReplaceSectionItem(existingActiveProposal.id, targetSection, summary, afterMarkdown, agentCreatedAt)
-    ];
+    existingActiveProposal.items = dedupedItems.map((item) => {
+      return buildPendingReplaceSectionItem(
+        existingActiveProposal.id,
+        item.targetSection,
+        item.summary,
+        item.afterMarkdown,
+        agentCreatedAt
+      );
+    });
     return existingActiveProposal;
   }
 
@@ -237,12 +267,18 @@ function upsertActiveProposalSet(
     version: 1,
     summary,
     rationale: proposal.rationale.trim(),
-    scope: 'section',
-    focusedSectionId: targetSection.id,
+    scope,
+    focusedSectionId,
     createdAt: agentCreatedAt,
-    items: [
-      buildPendingReplaceSectionItem(proposalSetId, targetSection, summary, afterMarkdown, agentCreatedAt)
-    ]
+    items: dedupedItems.map((item) => {
+      return buildPendingReplaceSectionItem(
+        proposalSetId,
+        item.targetSection,
+        item.summary,
+        item.afterMarkdown,
+        agentCreatedAt
+      );
+    })
   };
 
   saveProposalSet(store, relativePath, proposalSet);
@@ -358,6 +394,16 @@ async function writeDocumentAndStoreSafely(
   }
 }
 
+function dismissPendingItems(proposalSet: ProposalSetRecord): void {
+  for (const proposalItem of proposalSet.items) {
+    if (proposalItem.status === 'pending') {
+      proposalItem.status = 'dismissed';
+    }
+  }
+
+  refreshProposalSetStatus(proposalSet);
+}
+
 function updateProposalItemStatus(
   proposalSet: ProposalSetRecord,
   proposalItemId: string,
@@ -419,6 +465,8 @@ function toErrorMessage(error: unknown): string {
       return 'That action is no longer available.';
     case 'document_write_failed':
       return 'Workshop could not safely apply that proposal. The document was restored.';
+    case 'stale_document':
+      return 'This document changed while you were editing. Reload before saving.';
     default:
       return error.message || 'Request failed.';
   }
@@ -593,6 +641,68 @@ app.post('/api/comments', async (request: Request, response: Response) => {
   }
 });
 
+app.post('/api/artifact/save', async (request: Request, response: Response) => {
+  const body = request.body as {
+    path?: unknown;
+    markdown?: unknown;
+    baseUpdatedAt?: unknown;
+  } | undefined;
+
+  if (
+    typeof body?.path !== 'string'
+    || typeof body?.markdown !== 'string'
+    || typeof body?.baseUpdatedAt !== 'string'
+  ) {
+    response.status(400).json({ error: 'Expected path, markdown, and baseUpdatedAt.' });
+    return;
+  }
+
+  try {
+    const { absolutePath, relativePath } = await documentService.resolveArtifactPath(body.path);
+    const stats = await fs.stat(absolutePath);
+    const currentUpdatedAt = stats.mtime.toISOString();
+
+    if (currentUpdatedAt !== body.baseUpdatedAt) {
+      throw new Error('stale_document');
+    }
+
+    const currentStore = await artifactStore.readStore();
+    const nextMarkdown = body.markdown;
+    const currentMarkdown = await fs.readFile(absolutePath, 'utf8');
+
+    if (nextMarkdown === currentMarkdown) {
+      response.json(await buildProposalMutationResult(relativePath, null));
+      return;
+    }
+
+    const activeProposalSet = getActiveProposalSet(currentStore, relativePath);
+
+    if (activeProposalSet) {
+      dismissPendingItems(activeProposalSet);
+    }
+
+    const revision: RevisionRecord = {
+      id: createId('rev'),
+      documentId: relativePath,
+      createdAt: new Date().toISOString(),
+      summary: 'Manual edit',
+      source: 'manual_save',
+      proposalSetId: null,
+      markdown: nextMarkdown
+    };
+
+    appendRevision(currentStore, relativePath, revision);
+    await writeDocumentAndStoreSafely(absolutePath, currentMarkdown, nextMarkdown, currentStore);
+
+    const state = await buildProposalMutationResult(relativePath, revision);
+    response.json(state);
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
 app.post('/api/agent/turn', async (request: Request, response: Response) => {
   const body = request.body as {
     path?: unknown;
@@ -657,7 +767,7 @@ app.post('/api/agent/turn', async (request: Request, response: Response) => {
     });
 
     const agentCreatedAt = new Date().toISOString();
-    const proposalTargetSectionId = turnResult.proposal?.targetSectionId ?? null;
+    const proposalTargetSectionId = turnResult.proposal?.items[0]?.targetSectionId ?? null;
     const messages = turnResult.messages.map((message) => ({
       id: createId('turn_agent'),
       authorType: 'agent' as const,

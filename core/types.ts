@@ -38,6 +38,7 @@ export type Artifact = {
   relativePath: string;
   absolutePath: string;
   updatedAt: string;
+  markdown: string;
   renderedHtml?: string;
   comments: Comment[];
   sections: SectionWithComments[];
