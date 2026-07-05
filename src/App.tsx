@@ -16,6 +16,7 @@ import {
 } from './web/agent-auth';
 
 const DEFAULT_ARTIFACT_PATH = 'docs/project-brief.md';
+const COMPOSER_DRAFT_STORAGE_PREFIX = 'workshop:composer-draft:';
 const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
   {
     title: 'v0-technical-plan.md',
@@ -95,6 +96,10 @@ export function App() {
   const [editBaseUpdatedAt, setEditBaseUpdatedAt] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editNotice, setEditNotice] = useState<string | null>(null);
+
+  function getComposerDraftStorageKey(path: string) {
+    return `${COMPOSER_DRAFT_STORAGE_PREFIX}${path}`;
+  }
 
   function scrollThreadToBottom() {
     const thread = threadRef.current;
@@ -301,6 +306,34 @@ export function App() {
   useEffect(() => {
     void loadAgentAuthStatus();
   }, []);
+
+  useEffect(() => {
+    try {
+      const storedDraft = window.localStorage.getItem(getComposerDraftStorageKey(artifactPath));
+
+      if (storedDraft !== null) {
+        setComposerBody(storedDraft);
+      } else {
+        setComposerBody('');
+      }
+    } catch {
+      setComposerBody('');
+    }
+  }, [artifactPath]);
+
+  useEffect(() => {
+    try {
+      const storageKey = getComposerDraftStorageKey(artifactPath);
+
+      if (composerBody) {
+        window.localStorage.setItem(storageKey, composerBody);
+      } else {
+        window.localStorage.removeItem(storageKey);
+      }
+    } catch {
+      // Draft persistence is a resilience aid. Ignore storage failures.
+    }
+  }, [artifactPath, composerBody]);
 
   useEffect(() => {
     if (agentAuth?.state !== 'connecting') {
@@ -1362,6 +1395,8 @@ export function App() {
                 ) : (
                   <div
                     className="section-list"
+                    role="region"
+                    aria-label="Document content"
                     data-busy={interactionLocked ? 'true' : 'false'}
                     aria-busy={interactionLocked ? 'true' : 'false'}
                   >
