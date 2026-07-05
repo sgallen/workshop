@@ -1187,7 +1187,7 @@ export function App() {
             </button>
           </div>
 
-          <div className="workspace-menu-section workspace-menu-agent">
+          <div className="workspace-menu-section workspace-menu-agent" role="region" aria-label="Agent controls">
             <div className="workspace-menu-section-header">
               <p className="section-label workspace-menu-label">Agent</p>
             </div>
@@ -1251,7 +1251,7 @@ export function App() {
             )}
           </div>
 
-          <div className="workspace-menu-section workspace-menu-recents">
+          <div className="workspace-menu-section workspace-menu-recents" role="region" aria-label="Recent documents">
             <div className="workspace-menu-section-header">
               <p className="section-label workspace-menu-label">Recents</p>
               {!createMode ? (
@@ -1648,7 +1648,7 @@ export function App() {
                                   data-active-proposal={isActiveProposalAnchor ? 'true' : 'false'}
                                 >
                                   {proposalContextLabel || isActiveProposalAnchor ? (
-                                    <div className="comment-thread-header">
+                                    <div className="comment-thread-header" role="group" aria-label="Comment context">
                                       {proposalContextLabel ? <p className="comment-context comment-context-tight">{proposalContextLabel}</p> : <span />}
                                       {isActiveProposalAnchor ? (
                                         <button
