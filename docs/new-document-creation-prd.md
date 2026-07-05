@@ -4,11 +4,13 @@
 
 Define the smallest credible product slice that lets a user create a new blank or lightly scaffolded document from inside Workshop itself.
 
+Agent-passed links into existing documents remain a compatible way to enter Workshop, but they are not the focus of this PRD.
+
 This PRD is for the current web app and should also point toward the future native mobile app.
 
 ## One-Line Product Goal
 
-Let a user start a fresh document inside Workshop without relying on an external agent handoff or pre-existing file.
+Let a user create a brand new document inside Workshop and begin working immediately, while still supporting agent-passed links into existing documents as a separate entry path.
 
 ## Why This Matters
 
@@ -72,15 +74,13 @@ This is a local-first create-and-open slice.
 
 ## User Story
 
-Scott has an idea and wants to start a fresh document from his phone or laptop.
+A user can arrive in Workshop in two ways: an agent like OpenClaw can pass a link to an existing document, or the user can create a brand new document directly in Workshop.
 
-He may not have Barney or OpenClaw involved at that moment.
+This PRD is about the second path. The user opens Workshop, creates a new document, gives it a name, and starts working immediately.
 
-He opens Workshop, creates a new document, gives it a name, and starts working immediately.
+Sometimes they write the first words themselves.
 
-Sometimes he writes the first words himself.
-
-Sometimes he leaves it blank and asks the agent to draft a first pass.
+Sometimes they leave it blank and ask the agent to draft a first pass.
 
 Either path should feel native.
 
