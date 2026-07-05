@@ -96,6 +96,9 @@ export function App() {
   const [editBaseUpdatedAt, setEditBaseUpdatedAt] = useState<string | null>(null);
   const [savingEdit, setSavingEdit] = useState(false);
   const [editNotice, setEditNotice] = useState<string | null>(null);
+  const [createMode, setCreateMode] = useState(false);
+  const [createTitle, setCreateTitle] = useState('');
+  const [creatingDocument, setCreatingDocument] = useState(false);
 
   function getComposerDraftStorageKey(path: string) {
     return `${COMPOSER_DRAFT_STORAGE_PREFIX}${path}`;
@@ -293,7 +296,7 @@ export function App() {
       ? 'Nudge this proposal closer...'
       : 'Kick off the next move...';
   const hasUnsavedEditChanges = editMode && artifact ? editBody !== artifact.markdown : false;
-  const interactionLocked = loading || submitting || agentTurnPending || savingEdit;
+  const interactionLocked = loading || submitting || agentTurnPending || savingEdit || creatingDocument;
 
   useEffect(() => {
     void loadArtifact(artifactPath);
@@ -548,6 +551,8 @@ export function App() {
     setPendingLocalComment(null);
     setEditBaseUpdatedAt(nextArtifact.updatedAt);
     setEditNotice(null);
+    setCreateMode(false);
+    setCreateTitle('');
     setAttachedSectionId((current) => (current && nextArtifact.sections.some((section) => section.id === current) ? current : null));
 
     if (!editMode) {
@@ -781,6 +786,64 @@ export function App() {
     }
 
     await loadArtifact(resolvedArtifactPath, { preserveCurrentOnError: true });
+  }
+
+  function handleOpenCreateDocument() {
+    if (interactionLocked || editMode) {
+      return;
+    }
+
+    setCreateMode(true);
+    setCreateTitle('');
+    setError(null);
+  }
+
+  function handleCancelCreateDocument() {
+    if (creatingDocument) {
+      return;
+    }
+
+    setCreateMode(false);
+    setCreateTitle('');
+  }
+
+  async function handleCreateDocument(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const title = createTitle.trim();
+
+    if (!title || interactionLocked || editMode) {
+      return;
+    }
+
+    setCreatingDocument(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/artifact/create', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          title
+        })
+      });
+      const payload = await readJsonResponse<ArtifactPayload>(response);
+
+      if (!response.ok || !payload.artifact) {
+        throw new Error(payload.error ?? 'Failed to create document.');
+      }
+
+      applyArtifactPayload(payload);
+      setArtifactPath(payload.artifact.relativePath);
+      setMenuOpen(false);
+      setRailOpen(false);
+      void loadRecents();
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to create document.');
+    } finally {
+      setCreatingDocument(false);
+    }
   }
 
   function handleEnterEditMode() {
@@ -1176,7 +1239,48 @@ export function App() {
           <div className="workspace-menu-section workspace-menu-recents">
             <div className="workspace-menu-section-header">
               <p className="section-label workspace-menu-label">Recents</p>
+              {!createMode ? (
+                <button
+                  className="secondary-button compact-button workspace-menu-create-button"
+                  type="button"
+                  disabled={interactionLocked}
+                  onClick={handleOpenCreateDocument}
+                >
+                  New document
+                </button>
+              ) : null}
             </div>
+
+            {createMode ? (
+              <form className="workspace-create-form" onSubmit={(event) => void handleCreateDocument(event)}>
+                <input
+                  className="path-input workspace-create-input"
+                  type="text"
+                  value={createTitle}
+                  disabled={interactionLocked}
+                  onChange={(event) => setCreateTitle(event.target.value)}
+                  placeholder="Document title"
+                  autoFocus
+                />
+                <div className="workspace-create-actions">
+                  <button
+                    className="secondary-button compact-button"
+                    type="button"
+                    disabled={creatingDocument}
+                    onClick={handleCancelCreateDocument}
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="primary-button compact-button workspace-create-submit"
+                    type="submit"
+                    disabled={!createTitle.trim() || interactionLocked}
+                  >
+                    {creatingDocument ? 'Creating…' : 'Create'}
+                  </button>
+                </div>
+              </form>
+            ) : null}
 
             {displayedRecentArtifacts.length > 0 ? (
               <div className="recent-list" role="list">
@@ -1205,7 +1309,7 @@ export function App() {
               </div>
             ) : (
               <p className="empty-thread workspace-menu-empty">
-                Open another document and it will show up here for quick switching.
+                Create a new document or open another one and it will show up here for quick switching.
               </p>
             )}
           </div>
@@ -1368,7 +1472,7 @@ export function App() {
               className={`reader-layout${railOpen ? ' reader-layout-with-rail' : ''}`}
               onPointerDown={handleReaderSurfacePointerDown}
             >
-              <section className="artifact-card artifact-reader">
+              <section className="artifact-card artifact-reader" role="region" aria-label="Document workspace">
                 {editMode ? (
                   <div
                     className="manual-edit-shell"

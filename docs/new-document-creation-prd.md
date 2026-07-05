@@ -2,41 +2,36 @@
 
 ## Purpose
 
-Define the smallest credible product slice that lets a user create a new blank or lightly scaffolded document from inside Workshop itself.
+Define the smallest useful product slice that lets a user create a new Markdown document from inside Workshop and start working immediately.
 
-Agent-passed links into existing documents remain a compatible way to enter Workshop, but they are not the focus of this PRD.
-
-This PRD is for the current web app and should also point toward the future native mobile app.
+This PRD is for the current web app.
+It should stay compatible with future native/mobile shells, but it should not broaden scope now.
 
 ## One-Line Product Goal
 
-Let a user create a brand new document inside Workshop and begin working immediately, while still supporting agent-passed links into existing documents as a separate entry path.
+Let a user create a new blank Markdown document inside Workshop, open it immediately, and begin writing directly or collaborating with the agent.
 
 ## Why This Matters
 
-Right now Workshop assumes a document already exists.
+Workshop currently assumes a document already exists.
 
-That is workable in an assisted local setup.
+That is not enough for a real document product.
 
-It is not a sufficient product loop for either:
+Workshop should own the beginning of the workflow, not only the refinement phase.
 
-- independent use in the current web app
-- the future standalone mobile app
+The smallest credible beginning is:
 
-If Workshop is a real document product, it must let the user begin.
-
-That beginning should support at least two common intents:
-
-- start from blank
-- start from a small template or scaffold later if useful
+1. create a document
+2. open it immediately
+3. write directly or ask the agent for help
 
 ## Product Position
 
-Creating a document is a first-class Workshop action.
+Creating a document is a core Workshop action.
 
-It should not feel like an admin capability.
+It should feel like starting a fresh page in the product, not like performing file management.
 
-The creation flow is the entry point into the rest of the product:
+Workshop should support this loop:
 
 - create
 - write
@@ -44,67 +39,64 @@ The creation flow is the entry point into the rest of the product:
 - revise
 - return
 
-If Workshop cannot own `create`, it will always feel downstream of some other tool.
-
 ## v1 Goal
 
 Prove one simple loop:
 
 1. user opens Workshop
-2. user chooses to create a new document
-3. user names it and optionally chooses a location or starter shape
-4. Workshop creates the backing file and opens it immediately
-5. the user can begin writing directly or asking the agent for help
+2. user taps `New document`
+3. user enters a title
+4. Workshop creates a real Markdown file in a default location
+5. Workshop opens the document immediately
+6. user can either:
+   - enter manual edit mode and write
+   - use the discussion rail and ask the agent for help
 
-If that works smoothly on phone and laptop, the product owns the beginning of the workflow.
+If that feels smooth on phone and laptop, Workshop owns the beginning of the workflow.
 
 ## v1 Non-Goals
 
-This PRD does not aim to solve:
+This PRD does not include:
 
-- sophisticated template galleries
-- multi-user document ownership
-- cloud sync and remote storage providers
-- full folder management UX
-- imports from every external format
-- advanced permissions
-- document databases
+- template galleries
+- folder picker UX
+- arbitrary storage destinations
+- cloud storage
+- imports from external formats
+- document ownership systems
+- advanced metadata forms
+- multi-user collaboration
 
-This is a local-first create-and-open slice.
-
-## User Story
-
-A user can arrive in Workshop in two ways: an agent like OpenClaw can pass a link to an existing document, or the user can create a brand new document directly in Workshop.
-
-This PRD is about the second path. The user opens Workshop, creates a new document, gives it a name, and starts working immediately.
-
-Sometimes they write the first words themselves.
-
-Sometimes they leave it blank and ask the agent to draft a first pass.
-
-Either path should feel native.
+This is a local-first create-and-open slice only.
 
 ## Core Product Requirements
 
 ### 1. In-App Document Creation
 
-Workshop must offer an obvious way to create a document from within the app.
+Workshop must provide an obvious create action inside the app.
 
 Requirements:
 
-- the create action is discoverable from the main app flow
-- the user does not need a terminal, external file creation step, or agent handoff to begin
+- `New document` is discoverable from the left document list / recents pane
+- the action feels immediate and lightweight
+- the user does not need a terminal, external editor, or agent handoff to begin
 - after creation, the new document opens directly in Workshop
 
-### 2. Blank Document Support
+### 2. Blank Markdown Document Creation
 
-The user must be able to create a truly blank document.
+v1 must support creating a blank Markdown document only.
 
 Requirements:
 
-- blank means minimal or empty content, not forced boilerplate
-- the document is still valid enough for Workshop to open and manage
-- the user can immediately type into it or ask the agent to build a first draft
+- v1 creates a Markdown file with a minimal initial heading:
+  - `# <Title>`
+- the document must open cleanly in Workshop’s current document view
+- the user can immediately continue in manual edit mode or discussion mode
+
+Notes:
+
+- v1 does not include alternate starter templates
+- v1 does not create a truly empty file
 
 ### 3. Safe Naming and Storage
 
@@ -112,30 +104,52 @@ Workshop must create a real backing file safely.
 
 Requirements:
 
-- document naming should produce a stable path or slug
-- invalid names should be handled cleanly
-- collisions should surface clearly and avoid accidental overwrite
-- the storage location should fit the local-first model
+- the user provides a title
+- Workshop derives the file name from the title
+- the file name is slugified and saved as:
+  - `<slug>.md`
+- creation happens only inside one default allowed creation directory
+- collisions must fail clearly and must not overwrite an existing file
+- invalid or empty titles must fail with a clear message
+- path handling must prevent unsafe writes outside the allowed workspace root
 
 ### 4. Fast Start After Creation
 
-Document creation should flow directly into work.
+Creation must flow directly into work.
 
 Requirements:
 
 - the document opens immediately after creation
-- the user can enter manual edit mode or discussion mode right away
-- the empty-state copy should support a fresh-document workflow
+- the user remains in the normal Workshop document view
+- the user can immediately:
+  - enter manual edit mode
+  - open the discussion rail
+  - ask the agent for a first draft or outline
+- first-open UI should feel calm and lightweight, not like a setup flow
 
-### 5. Future-Friendly for Mobile
+### 5. Consistent File-Backed Initialization
 
-The web flow should not assume desktop-only patterns.
+New documents must fit the current Workshop model cleanly.
 
 Requirements:
 
-- the create flow should make sense in a constrained mobile UI
-- it should not depend on drag-and-drop or file-picker complexity
-- the interaction should foreshadow a native mobile create experience
+- the backing file exists on disk before the document opens
+- the new document starts with:
+  - no comments
+  - no active proposals
+  - no revisions yet unless implementation needs an explicit initial revision later
+- the document should appear naturally in recents after creation/open
+
+### 6. Mobile-Friendly Interaction
+
+The create flow must work comfortably on phone.
+
+Requirements:
+
+- the flow works in a constrained mobile layout
+- it does not rely on drag-and-drop or desktop-style file management
+- it uses a simple title input plus create action
+- it should feel compatible with the later native/mobile shell direction
 
 ## Product Flows
 
@@ -143,54 +157,56 @@ Requirements:
 
 1. user taps `New document`
 2. user enters a title
-3. Workshop creates the file
+3. Workshop creates `<slug>.md` in the default document directory
 4. Workshop opens the new document
-5. the user starts writing or asks the agent to draft
+5. user starts writing or asks the agent to draft
 
 Success criteria:
 
 - the path from idea to open document feels immediate
+- no external tool is required
 
-### Flow 2: Create Then Dictate
+### Flow 2: Create Then Write
 
-1. user creates a new document on phone
-2. user enters edit mode
-3. user dictates rough text into the blank document
+1. user creates a new document
+2. user enters manual edit mode
+3. user writes or dictates rough text
 4. user saves
-5. user asks the agent to clean it up
+5. user continues refining
 
 Success criteria:
 
-- creation supports the rapid capture workflow, not just formal authoring
+- Workshop supports rapid capture, not just review
 
 ### Flow 3: Create Then Ask Agent For First Draft
 
-1. user creates a blank document
-2. user leaves it mostly empty
-3. user asks the agent to produce a first draft or outline
-4. Workshop uses the normal proposal/discussion flow from there
+1. user creates a new document
+2. user leaves the initial content mostly minimal
+3. user asks the agent for a first draft or outline
+4. Workshop uses the normal discussion/proposal flow
 
 Success criteria:
 
-- a blank document can still be a useful starting surface for agent-led drafting
+- a newly created document works as a valid starting surface for agent-led drafting
 
 ## UX Requirements
 
-The create flow should feel lightweight.
+The create flow should feel lightweight and obvious.
 
 Required visible elements:
 
 - clear `New document` action
 - title input
 - create confirmation action
-- helpful first-open empty state
+- immediate open into the normal document view
 
-Nice to avoid in v1:
+Avoid in v1:
 
-- too many required metadata fields
 - file-system jargon
-- heavyweight setup screens
-- creation dialogs that feel like project management software
+- folder trees
+- template galleries
+- extra required metadata
+- project-management style setup screens
 
 The experience should feel like:
 
@@ -204,33 +220,40 @@ not:
 
 ### 1. File-Backed Creation
 
-Workshop must create a real document file that fits the current file-backed architecture.
+Workshop must create a real Markdown file on disk.
 
-### 2. Consistent Artifact Initialization
+### 2. Default Creation Root
 
-New documents should start with predictable Workshop metadata and no broken assumptions around comments, proposals, or revisions.
+v1 must create documents only inside one server-defined default creation directory.
 
-### 3. Recents Integration
+### 3. Safe Path Handling
 
-Newly created documents should appear naturally in recents and become part of the standard open/reopen flow.
+The server must sanitize file names and prevent writes outside the allowed workspace root.
 
-### 4. Safe Path Handling
+### 4. Collision Safety
 
-The server must sanitize and validate document creation paths to avoid unsafe writes.
+If a file already exists at the derived path, creation must fail clearly and must not overwrite it.
+
+### 5. Recents Integration
+
+A newly created document must appear naturally in the recents/open flow.
 
 ## Open Questions
 
-- Should v1 support only blank documents, or also one or two small starter templates?
-- Should document title and file name be tightly coupled in v1?
-- Should a newly created blank document include a placeholder heading, or truly no content?
-- Should creation happen in one default folder or allow folder choice?
+Later, but not required for v1:
+
+- Should Workshop support one or two small starter templates?
+- Should users eventually choose folders?
+- Should title and filename be decoupled later?
 
 ## Product Test
 
 This PRD is satisfied when all of the following are true:
 
-- a user can create a new document entirely from within Workshop
-- the result is a real backing file
+- a user can create a new document entirely inside Workshop
+- the result is a real Markdown file on disk
+- the file is created in a safe default location
 - the new document opens immediately
 - the user can start writing directly or asking the agent for help
+- collisions do not overwrite existing files
 - the flow works comfortably in the current web app and points cleanly toward a future mobile shell

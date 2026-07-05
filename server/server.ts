@@ -27,6 +27,7 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 const SOURCE_ROOT = path.resolve(ROOT_DIR, '..');
 const PORT = Number(process.env.WORKSHOP_SERVER_PORT ?? 4174);
 const DEFAULT_ARTIFACT_PATH = 'docs/project-brief.md';
+const DEFAULT_CREATION_DIR = 'docs';
 const APP_ORIGIN = process.env.WORKSHOP_APP_ORIGIN?.trim() || '';
 
 const app = express();
@@ -44,6 +45,16 @@ const documentService = createDocumentService({
 
 function createId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+}
+
+function slugifyFileName(value: string): string {
+  return value
+    .trim()
+    .toLowerCase()
+    .replace(/['’]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 80);
 }
 
 function getAppOrigin(request: Request): string {
@@ -516,7 +527,8 @@ app.get('/api/health', (_request: Request, response: Response) => {
 app.get('/api/config', (request: Request, response: Response) => {
   response.json({
     appOrigin: getAppOrigin(request),
-    defaultArtifactPath: DEFAULT_ARTIFACT_PATH
+    defaultArtifactPath: DEFAULT_ARTIFACT_PATH,
+    defaultCreationDir: DEFAULT_CREATION_DIR
   });
 });
 
@@ -669,6 +681,60 @@ app.post('/api/comments', async (request: Request, response: Response) => {
   } catch (error) {
     response.status(400).json({
       error: error instanceof Error ? error.message : 'Failed to save comment.'
+    });
+  }
+});
+
+app.post('/api/artifact/create', async (request: Request, response: Response) => {
+  const body = request.body as {
+    title?: unknown;
+  } | undefined;
+
+  if (typeof body?.title !== 'string') {
+    response.status(400).json({ error: 'Expected title.' });
+    return;
+  }
+
+  const title = body.title.trim();
+
+  if (!title) {
+    response.status(400).json({ error: 'Title cannot be empty.' });
+    return;
+  }
+
+  const slug = slugifyFileName(title);
+
+  if (!slug) {
+    response.status(400).json({ error: 'Title must contain at least one letter or number.' });
+    return;
+  }
+
+  try {
+    const requestedPath = path.posix.join(DEFAULT_CREATION_DIR, `${slug}.md`);
+    const { absolutePath, relativePath } = await documentService.resolveArtifactPath(requestedPath);
+
+    try {
+      await fs.access(absolutePath);
+      response.status(409).json({ error: 'A document with that name already exists.' });
+      return;
+    } catch {
+      // Expected when creating a new document.
+    }
+
+    const initialMarkdown = `# ${title}\n`;
+    await fs.mkdir(path.dirname(absolutePath), { recursive: true });
+    await fs.writeFile(absolutePath, initialMarkdown, { flag: 'wx' });
+
+    const currentStore = await artifactStore.readStore();
+    const artifact = await documentService.loadArtifact(relativePath);
+    artifactStore.touchRecentArtifact(currentStore, artifact);
+    await artifactStore.writeStore(currentStore);
+
+    const state = await buildArtifactState(relativePath);
+    response.status(201).json(state);
+  } catch (error) {
+    response.status(400).json({
+      error: error instanceof Error ? error.message : 'Failed to create document.'
     });
   }
 });
