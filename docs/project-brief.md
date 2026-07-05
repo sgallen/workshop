@@ -6,7 +6,7 @@ Workshop is the native way to workshop documents with an agent.
 
 ## Core Insight
 
-Chat is a good place to begin.
+Chat is a good place to start a doc.
 
 It is often a bad place to refine.
 

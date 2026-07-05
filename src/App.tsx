@@ -688,6 +688,11 @@ export function App() {
       return;
     }
 
+    if (editMode && hasUnsavedEditChanges) {
+      setError('Finish or cancel the current manual edit before reloading the document.');
+      return;
+    }
+
     await loadArtifact(resolvedArtifactPath, { preserveCurrentOnError: true });
   }
 
@@ -716,7 +721,13 @@ export function App() {
   }
 
   async function handleSaveEdit() {
-    if (!artifact || !editBaseUpdatedAt || interactionLocked || !hasUnsavedEditChanges) {
+    if (!artifact || !editBaseUpdatedAt || interactionLocked) {
+      return;
+    }
+
+    if (!hasUnsavedEditChanges) {
+      setEditMode(false);
+      setEditNotice(null);
       return;
     }
 
@@ -934,7 +945,7 @@ export function App() {
       <button
         className="thread-event-note thread-event-note-clickable"
         type="button"
-        disabled={loading || submitting || agentTurnPending}
+        disabled={interactionLocked}
         onClick={() => handleFocusProposalSection(targetSectionId)}
       >
         {eventLabel}
@@ -980,7 +991,7 @@ export function App() {
             <button
               className="workspace-menu-close"
               type="button"
-              disabled={loading || submitting || agentTurnPending}
+              disabled={interactionLocked}
               onClick={() => setMenuOpen(false)}
               aria-label="Close menu"
             >
@@ -1009,7 +1020,7 @@ export function App() {
                       className="secondary-button compact-button discussion-header-button"
                       type="button"
                       onClick={() => void handleConnectAgent()}
-                      disabled={agentAuthLoading || loading || submitting || agentTurnPending}
+                      disabled={agentAuthLoading || interactionLocked}
                     >
                       {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
                     </button>
@@ -1044,7 +1055,7 @@ export function App() {
                   className="secondary-button compact-button discussion-header-button"
                   type="button"
                   onClick={() => void handleDisconnectAgent()}
-                  disabled={agentAuthLoading || loading || submitting || agentTurnPending}
+                  disabled={agentAuthLoading || interactionLocked}
                 >
                   {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
                 </button>
@@ -1066,7 +1077,7 @@ export function App() {
                       className="recent-item"
                       data-active={recent.relativePath === resolvedArtifactPath ? 'true' : 'false'}
                       type="button"
-                      disabled={loading || submitting || agentTurnPending}
+                      disabled={interactionLocked}
                       onClick={() => handleOpenArtifact(recent.relativePath)}
                       aria-current={recent.relativePath === resolvedArtifactPath ? 'page' : undefined}
                     >
@@ -1098,7 +1109,7 @@ export function App() {
               <button
                 className="secondary-button compact-button icon-button menu-trigger"
                 type="button"
-                disabled={loading || submitting || agentTurnPending}
+                disabled={interactionLocked}
                 onClick={() => setMenuOpen(true)}
                 aria-label="Open menu"
               >
@@ -1126,12 +1137,12 @@ export function App() {
                 <input
                   className="path-input"
                   type="text"
-                  disabled={loading || submitting || agentTurnPending}
+                  disabled={interactionLocked}
                   value={draftPath}
                   onChange={(event) => setDraftPath(event.target.value)}
                   placeholder={DEFAULT_ARTIFACT_PATH}
                 />
-                <button className="secondary-button" type="submit" disabled={loading || submitting || agentTurnPending}>
+                <button className="secondary-button" type="submit" disabled={interactionLocked}>
                   {loading ? 'Opening…' : 'Open'}
                 </button>
               </div>
@@ -1150,13 +1161,16 @@ export function App() {
 
         {artifact ? (
           <>
-            <header className="reader-bar" onPointerDown={handleReaderSurfacePointerDown}>
+            <header
+              className={`reader-bar${editMode ? ' reader-bar-editing' : ''}`}
+              onPointerDown={handleReaderSurfacePointerDown}
+            >
               <div className="reader-bar-row">
                 <div className="reader-bar-leading">
                   <button
                     className="secondary-button compact-button icon-button menu-trigger"
                     type="button"
-                    disabled={loading || submitting || agentTurnPending}
+                    disabled={interactionLocked}
                     onClick={() => {
                       setRailOpen(false);
                       setMenuOpen(true);
@@ -1172,11 +1186,11 @@ export function App() {
                     <p className="reader-title">{artifact.title}</p>
                   </div>
                 </div>
-                <div className="reader-actions">
+                <div className="reader-actions" role="group" aria-label="Document actions">
                   {editMode ? (
                     <>
                       <button
-                        className="secondary-button compact-button reader-rail-button"
+                        className="secondary-button compact-button proposal-review-button reader-rail-button"
                         type="button"
                         disabled={savingEdit}
                         onClick={handleCancelEditMode}
@@ -1184,9 +1198,9 @@ export function App() {
                         Cancel
                       </button>
                       <button
-                        className="primary-button compact-button reader-rail-button"
+                        className="primary-button compact-button action-primary-button proposal-review-button reader-rail-button"
                         type="button"
-                        disabled={!hasUnsavedEditChanges || interactionLocked || hasRemoteUpdate}
+                        disabled={interactionLocked || hasRemoteUpdate}
                         title={hasRemoteUpdate ? 'Reload the document before saving your edit.' : undefined}
                         onClick={() => void handleSaveEdit()}
                       >
@@ -1203,23 +1217,25 @@ export function App() {
                       Edit
                     </button>
                   )}
-                  <button
-                    className="secondary-button compact-button reader-rail-button"
-                    type="button"
-                    disabled={interactionLocked || editMode}
-                    onClick={() => {
-                      setMenuOpen(false);
-                      setRailOpen(true);
-                    }}
-                  >
-                    Discuss
-                  </button>
+                  {!editMode ? (
+                    <button
+                      className="secondary-button compact-button reader-rail-button"
+                      type="button"
+                      disabled={interactionLocked}
+                      onClick={() => {
+                        setMenuOpen(false);
+                        setRailOpen(true);
+                      }}
+                    >
+                      Discuss
+                    </button>
+                  ) : null}
                 </div>
               </div>
               {activeProposalSet || hasRemoteUpdate || agentTurnPending || loading || editMode || editNotice ? (
                 <div className="reader-status-banner">
                   {reviewStateLabel ? (
-                    <p className="reader-review-state">
+                    <p className="reader-review-state" role="status" aria-live="polite">
                       <span className="reader-review-dot" aria-hidden="true" />
                       <span>{reviewStateLabel}</span>
                     </p>
@@ -1256,7 +1272,7 @@ export function App() {
                     </div>
                   ) : null}
                   {hasRemoteUpdate ? (
-                    <button className="text-button" type="button" disabled={loading || submitting || agentTurnPending} onClick={() => void handleReloadDocument()}>
+                    <button className="text-button" type="button" disabled={interactionLocked} onClick={() => void handleReloadDocument()}>
                       {loading ? 'Reloading…' : 'Reload'}
                     </button>
                   ) : null}
@@ -1270,7 +1286,12 @@ export function App() {
             >
               <section className="artifact-card artifact-reader">
                 {editMode ? (
-                  <div className="manual-edit-shell">
+                  <div
+                    className="manual-edit-shell"
+                    aria-busy={savingEdit ? 'true' : 'false'}
+                    role="region"
+                    aria-label="Manual document edit"
+                  >
                     <div className="manual-edit-meta">
                       <p className="proposal-kicker">Edit mode</p>
                       <p className="context-subtle">
@@ -1283,6 +1304,7 @@ export function App() {
                       onChange={(event) => setEditBody(event.target.value)}
                       placeholder="Edit the document markdown..."
                       disabled={savingEdit}
+                      aria-label="Document markdown editor"
                       spellCheck={false}
                     />
                   </div>
@@ -1318,7 +1340,7 @@ export function App() {
                           ) : (
                             <div className="proposal-inline-block" data-stale={hasStalePendingProposals ? 'true' : 'false'}>
                               <div className="proposal-inline-topbar">
-                                <div className="proposal-compare-toggle" aria-label="Compare proposal versions">
+                              <div className="proposal-compare-toggle" role="group" aria-label="Compare proposal versions">
                                   <button
                                     className={`proposal-toggle-button${proposalCompareMode === 'original' ? ' proposal-toggle-button-active' : ''}`}
                                     type="button"
@@ -1355,7 +1377,7 @@ export function App() {
                                     Reject
                                   </button>
                                   <button
-                                    className="primary-button compact-button proposal-review-button"
+                                    className="primary-button compact-button action-primary-button proposal-review-button"
                                     type="button"
                                     disabled={interactionLocked || hasStalePendingProposals}
                                     title={hasStalePendingProposals ? 'Reload the document before accepting this proposal.' : undefined}
@@ -1401,7 +1423,7 @@ export function App() {
                     <button
                       className="workspace-menu-close"
                       type="button"
-                      disabled={loading || submitting || agentTurnPending}
+                      disabled={interactionLocked}
                       onClick={() => setRailOpen(false)}
                       aria-label="Close discussion"
                     >
@@ -1412,7 +1434,7 @@ export function App() {
                   <div
                     className="discussion-thread"
                     ref={threadRef}
-                    aria-busy={loading || submitting || agentTurnPending ? 'true' : 'false'}
+                    aria-busy={interactionLocked ? 'true' : 'false'}
                   >
                     {displayedConversationComments.length > 0 || agentTurnPending || proposalHistory.length > 0 ? (
                       <div className="thread-list">
@@ -1436,7 +1458,7 @@ export function App() {
                                         <button
                                           className="text-button text-button-muted comment-jump-link"
                                           type="button"
-                                          disabled={loading || submitting || agentTurnPending}
+                                          disabled={interactionLocked}
                                           onClick={handleOpenProposalInDocument}
                                         >
                                           Jump to change
@@ -1451,7 +1473,7 @@ export function App() {
                                         <button
                                           className="secondary-button compact-button proposal-review-button"
                                           type="button"
-                                          disabled={loading || submitting || agentTurnPending}
+                                          disabled={interactionLocked}
                                           onClick={(event) => {
                                             event.stopPropagation();
                                             void handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`);
@@ -1460,9 +1482,9 @@ export function App() {
                                           Reject
                                         </button>
                                         <button
-                                          className="primary-button compact-button proposal-review-button"
+                                          className="primary-button compact-button action-primary-button proposal-review-button"
                                           type="button"
-                                          disabled={loading || submitting || agentTurnPending || hasStalePendingProposals}
+                                          disabled={interactionLocked || hasStalePendingProposals}
                                           title={hasStalePendingProposals ? 'Reload the document before accepting these changes.' : undefined}
                                           onClick={(event) => {
                                             event.stopPropagation();
@@ -1479,7 +1501,7 @@ export function App() {
                                           <button
                                             className="text-button"
                                             type="button"
-                                            disabled={loading || submitting || agentTurnPending}
+                                            disabled={interactionLocked}
                                             onClick={(event) => {
                                               event.stopPropagation();
                                               void handleReloadDocument();
@@ -1520,7 +1542,7 @@ export function App() {
                     className="discussion-composer"
                     onSubmit={(event) => void handleComposerSubmit(event)}
                     ref={composerFrameRef}
-                    aria-busy={loading || submitting || agentTurnPending ? 'true' : 'false'}
+                    aria-busy={interactionLocked ? 'true' : 'false'}
                   >
                     {hasRemoteUpdate ? (
                       <div className="discussion-status-inline" role="status" aria-live="polite">
@@ -1532,7 +1554,7 @@ export function App() {
                             ? 'A newer document version is available. Reload before accepting proposals.'
                             : 'A newer document version is available.'}
                         </span>
-                        <button className="text-button" type="button" disabled={loading || submitting || agentTurnPending} onClick={() => void handleReloadDocument()}>
+                        <button className="text-button" type="button" disabled={interactionLocked} onClick={() => void handleReloadDocument()}>
                           {loading ? 'Reloading…' : 'Reload'}
                         </button>
                       </div>
@@ -1547,16 +1569,16 @@ export function App() {
                         onChange={(event) => setComposerBody(event.target.value)}
                         onFocus={handleComposerFocus}
                         onBlur={handleComposerBlur}
-                        disabled={submitting || loading || agentTurnPending}
+                        disabled={interactionLocked}
                         placeholder={composerPlaceholder}
                       />
                       <button
                         className="primary-button composer-submit"
                         type="submit"
-                        disabled={submitting || loading || agentTurnPending}
-                        aria-label={submitting || loading || agentTurnPending ? 'Sending message' : 'Send message'}
+                        disabled={interactionLocked}
+                        aria-label={interactionLocked ? 'Sending message' : 'Send message'}
                       >
-                        {submitting || loading || agentTurnPending ? '...' : '➤'}
+                        {interactionLocked ? '...' : '➤'}
                       </button>
                     </div>
                   </form>

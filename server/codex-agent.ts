@@ -42,8 +42,11 @@ type RawAgentTurnResult = {
   proposal: null | {
     summary: string;
     rationale: string;
-    targetSectionId: string;
-    afterMarkdown: string;
+    items: Array<{
+      summary: string;
+      targetSectionId: string;
+      afterMarkdown: string;
+    }>;
   };
 };
 
@@ -145,6 +148,7 @@ function buildDocumentTurnPrompt(input: DocumentAgentTurnInput): string {
     : 'Focused section: none';
 
   const activeProposalItem = input.activeProposalSet?.items.find((item) => item.status === 'pending') ?? null;
+  const activeProposalItems = input.activeProposalSet?.items.filter((item) => item.status === 'pending') ?? [];
   const activeProposalBlock = input.activeProposalSet
     ? [
         'There is already one active pending proposal set.',
@@ -153,14 +157,18 @@ function buildDocumentTurnPrompt(input: DocumentAgentTurnInput): string {
         'Only return discussion with proposal = null when the user is clearly discussing, asking a question, or not yet asking for a revised draft.',
         `Current proposal summary: ${input.activeProposalSet.summary}`,
         `Current proposal focused section id: ${input.activeProposalSet.focusedSectionId ?? 'none'}`,
-        activeProposalItem ? `Current proposal target section id: ${activeProposalItem.sectionId ?? 'none'}` : 'Current proposal target section id: none',
-        activeProposalItem
-          ? [
-              '<current_pending_proposal_markdown>',
-              activeProposalItem.afterMarkdown,
-              '</current_pending_proposal_markdown>'
-            ].join('\n')
-          : 'There is no pending proposal item markdown.',
+        activeProposalItems.length > 0
+          ? activeProposalItems.map((item, index) => {
+              return [
+                `Current proposal item ${index + 1} target section id: ${item.sectionId ?? 'none'}`,
+                '<current_pending_proposal_markdown>',
+                item.afterMarkdown,
+                '</current_pending_proposal_markdown>'
+              ].join('\n');
+            }).join('\n')
+          : activeProposalItem
+            ? `Current proposal target section id: ${activeProposalItem.sectionId ?? 'none'}`
+            : 'There is no pending proposal item markdown.',
         'Any refined proposal must still be written against the canonical document provided below, not against an imagined layered draft.'
       ].join('\n')
     : 'There is no active proposal set.';
@@ -177,10 +185,13 @@ Rules:
 - Otherwise sectionId must be null.
 - The full document is in context.
 - The focused section is only a hint, not a hard boundary.
-- Only create a proposal when you can honestly express it as one replace_section proposal against exactly one existing section id.
-- If the request is mainly critique, clarification, or a broader rewrite than one section, return discussion only and set proposal to null.
+- Only create a proposal when you can honestly express it as one or more replace_section items against existing section ids.
+- If the request spans a few sections but can still be expressed as explicit section replacements, prefer returning a multi-item proposal instead of discussion only.
+- If the request is mainly critique, clarification, or too broad to express as a small set of concrete section replacements, return discussion only and set proposal to null.
 - If there is already an active pending proposal set and the user is pushing on the wording or direction, prefer returning a refined replacement proposal.
-- If you create a proposal, afterMarkdown must be complete Markdown for the replacement section, including the heading line.
+- If you create a proposal, each proposal item must include summary, targetSectionId, and afterMarkdown.
+- If you create a proposal, each item's afterMarkdown must be complete Markdown for the replacement section, including the heading line.
+- Keep proposal item count small and focused.
 - If you create a proposal, your discussion messages must describe it as a proposal or suggested revision, not as an already-applied document change.
 - Avoid implementation wording like "I changed", "I updated", or "I tightened" when proposal is not null. Prefer phrasing like "I propose", "A tighter version would be", or "This proposal would".
 - If the user is focused on a section and asks for a rewrite there, prefer that section id.
@@ -237,14 +248,26 @@ async function runCodexExec(rootDir: string, prompt: string): Promise<RawAgentTu
         anyOf: [
           { type: 'null' },
           {
-            type: 'object',
-            properties: {
-              summary: { type: 'string' },
-              rationale: { type: 'string' },
-              targetSectionId: { type: 'string' },
-              afterMarkdown: { type: 'string' }
-            },
-            required: ['summary', 'rationale', 'targetSectionId', 'afterMarkdown'],
+              type: 'object',
+              properties: {
+                summary: { type: 'string' },
+                rationale: { type: 'string' },
+                items: {
+                  type: 'array',
+                  items: {
+                    type: 'object',
+                    properties: {
+                      summary: { type: 'string' },
+                      targetSectionId: { type: 'string' },
+                      afterMarkdown: { type: 'string' }
+                    },
+                    required: ['summary', 'targetSectionId', 'afterMarkdown'],
+                    additionalProperties: false
+                  },
+                  minItems: 1
+                }
+              },
+            required: ['summary', 'rationale', 'items'],
             additionalProperties: false
           }
         ]

@@ -369,6 +369,38 @@ function applyReplaceSectionProposalToMarkdown(markdown: string, proposalItem: P
   return replaceSectionMarkdown(markdown, targetSection, proposalItem.afterMarkdown);
 }
 
+function applyReplaceSectionProposalsToMarkdown(markdown: string, proposalItems: ProposalItemRecord[]): string {
+  const originalSections = parseMarkdownSections(markdown);
+  const replacements = proposalItems.map((proposalItem) => {
+    if (proposalItem.kind !== 'replace_section' || !proposalItem.sectionId) {
+      throw new Error('invalid_request');
+    }
+
+    const targetSection = originalSections.find((section) => section.id === proposalItem.sectionId);
+
+    if (!targetSection) {
+      throw new Error('proposal_conflict');
+    }
+
+    if (targetSection.markdown.trim() !== proposalItem.beforeMarkdown.trim()) {
+      throw new Error('proposal_conflict');
+    }
+
+    return {
+      targetSection,
+      afterMarkdown: proposalItem.afterMarkdown
+    };
+  });
+
+  let nextMarkdown = markdown;
+
+  for (const replacement of replacements.sort((left, right) => right.targetSection.startLine - left.targetSection.startLine)) {
+    nextMarkdown = replaceSectionMarkdown(nextMarkdown, replacement.targetSection, replacement.afterMarkdown);
+  }
+
+  return nextMarkdown;
+}
+
 async function writeDocumentAndStoreSafely(
   absolutePath: string,
   originalMarkdown: string,
@@ -903,10 +935,9 @@ app.post('/api/proposals/:proposalSetId/accept-all', async (request: Request, re
     }
 
     const originalMarkdown = await fs.readFile(absolutePath, 'utf8');
-    let latestMarkdown = originalMarkdown;
+    const latestMarkdown = applyReplaceSectionProposalsToMarkdown(originalMarkdown, pendingItems);
 
     for (const proposalItem of pendingItems) {
-      latestMarkdown = applyReplaceSectionProposalToMarkdown(latestMarkdown, proposalItem);
       updateProposalItemStatus(proposalSet, proposalItem.id, 'applied');
     }
 
