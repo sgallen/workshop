@@ -443,6 +443,38 @@ textarea.path-input {
   border-radius: 14px;
 }
 
+.document-empty-state {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border: 1px solid var(--surface-card-border);
+  border-radius: 14px;
+  background:
+    radial-gradient(circle at top left, rgba(62, 90, 138, 0.08), transparent 32%),
+    color-mix(in srgb, var(--surface-card) 92%, var(--surface-page-base) 8%);
+}
+
+.document-empty-title {
+  margin: 0;
+  color: var(--ink);
+  font-size: clamp(1.15rem, 2vw, 1.35rem);
+  font-weight: 650;
+  letter-spacing: -0.03em;
+  line-height: 1.2;
+}
+
+.document-empty-copy {
+  margin: 0;
+}
+
+.document-empty-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .manual-edit-shell {
   display: grid;
   gap: 12px;

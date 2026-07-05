@@ -295,6 +295,21 @@ export function App() {
     : activeProposalSet
       ? 'Nudge this proposal closer...'
       : 'Kick off the next move...';
+  const isFreshDocument = useMemo(() => {
+    if (!artifact) {
+      return false;
+    }
+
+    const trimmedMarkdown = artifact.markdown.trim();
+    const headingOnlyMarkdown = artifact.sections.length === 1 ? artifact.sections[0]?.markdown.trim() ?? '' : '';
+
+    return (
+      displayedConversationComments.length === 0
+      && proposalHistory.length === 0
+      && trimmedMarkdown.length > 0
+      && trimmedMarkdown === headingOnlyMarkdown
+    );
+  }, [artifact, displayedConversationComments.length, proposalHistory.length]);
   const hasUnsavedEditChanges = editMode && artifact ? editBody !== artifact.markdown : false;
   const interactionLocked = loading || submitting || agentTurnPending || savingEdit || creatingDocument;
 
@@ -1504,6 +1519,37 @@ export function App() {
                     data-busy={interactionLocked ? 'true' : 'false'}
                     aria-busy={interactionLocked ? 'true' : 'false'}
                   >
+                    {isFreshDocument ? (
+                      <div className="document-empty-state" role="status" aria-live="polite">
+                        <p className="proposal-kicker">New document</p>
+                        <h2 className="document-empty-title">Start with a first line or ask for a first draft.</h2>
+                        <p className="context-subtle document-empty-copy">
+                          This page is ready. Write directly in edit mode, or open the discussion rail and ask the agent to sketch an outline.
+                        </p>
+                        <div className="document-empty-actions">
+                          <button
+                            className="primary-button compact-button action-primary-button"
+                            type="button"
+                            disabled={interactionLocked || hasPendingProposal}
+                            title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
+                            onClick={handleEnterEditMode}
+                          >
+                            Start writing
+                          </button>
+                          <button
+                            className="secondary-button compact-button"
+                            type="button"
+                            disabled={interactionLocked}
+                            onClick={() => {
+                              setMenuOpen(false);
+                              setRailOpen(true);
+                            }}
+                          >
+                            Ask the agent
+                          </button>
+                        </div>
+                      </div>
+                    ) : null}
                     {artifact.sections.map((section) => {
                       const proposalItem = proposalItemsBySection.get(section.id) ?? null;
                       const proposalCompareMode = proposalItem ? proposalCompareModeById[proposalItem.id] ?? 'proposed' : null;
