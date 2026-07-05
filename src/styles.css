@@ -1485,6 +1485,13 @@ textarea.path-input {
   box-shadow: none;
 }
 
+.secondary-button:disabled {
+  opacity: 1;
+  background: color-mix(in srgb, var(--button-secondary-bg) 68%, var(--surface-page-base) 32%);
+  border-color: color-mix(in srgb, var(--line-strong) 55%, var(--surface-page-base) 45%);
+  color: color-mix(in srgb, var(--text-muted) 82%, transparent 18%);
+}
+
 .text-button:disabled,
 .workspace-menu-close:disabled {
   opacity: 0.58;

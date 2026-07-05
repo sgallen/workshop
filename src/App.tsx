@@ -166,6 +166,7 @@ export function App() {
     );
   }, [pendingProposalItems]);
   const pendingProposalCount = pendingProposalItems.length;
+  const hasPendingProposal = pendingProposalCount > 0;
   const activeProposalAnchorCommentId = useMemo(() => {
     if (!activeProposalSet) {
       return null;
@@ -754,6 +755,11 @@ export function App() {
       return;
     }
 
+    if (hasPendingProposal) {
+      setError('Resolve the pending proposal before entering manual edit mode.');
+      return;
+    }
+
     setEditBody(artifact.markdown);
     setEditBaseUpdatedAt(artifact.updatedAt);
     setEditNotice(null);
@@ -1045,7 +1051,13 @@ export function App() {
       />
 
       <aside className={`workspace-menu${menuOpen ? ' workspace-menu-open' : ''}`} aria-label="Workshop navigation">
-        <div className="workspace-menu-panel" onPointerDown={preventPanelDismiss} onClick={preventPanelDismiss}>
+        <div
+          className="workspace-menu-panel"
+          role="region"
+          aria-label="Workshop menu"
+          onPointerDown={preventPanelDismiss}
+          onClick={preventPanelDismiss}
+        >
           <div className="workspace-menu-header">
             <div className="workspace-brand-lockup">
               <div className="workspace-logo-mark" aria-hidden="true">W</div>
@@ -1276,7 +1288,8 @@ export function App() {
                     <button
                       className="secondary-button compact-button reader-rail-button"
                       type="button"
-                      disabled={interactionLocked}
+                      disabled={interactionLocked || hasPendingProposal}
+                      title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
                       onClick={handleEnterEditMode}
                     >
                       Edit
@@ -1404,7 +1417,7 @@ export function App() {
                 onPointerDown={preventPanelDismiss}
                 onClick={preventPanelDismiss}
               >
-                <div className="discussion-rail-panel">
+                <div className="discussion-rail-panel" role="region" aria-label="Discussion panel">
                   <div className="discussion-rail-header">
                     <div className="discussion-rail-header-main">
                       <span
