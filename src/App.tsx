@@ -6,12 +6,11 @@ import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
 import type { Artifact, Comment, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
 import { formatRecentActivity } from './lib/formatting';
 import { readJsonResponse } from './lib/read-json-response';
+import { AgentConnectionStatus, type AgentConnectionState } from './components/AgentConnectionStatus';
 import { ProposalInlineCard } from './components/ProposalInlineCard';
 import { ProposalThreadFooter } from './components/ProposalThreadFooter';
 import { ReaderStatusBanner } from './components/ReaderStatusBanner';
 import {
-  renderDrawerAgentActionLabel,
-  renderDrawerAgentStatusLabel,
   renderRailAgentHint,
   summarizeAgentStatus,
   type AgentAuthStatus
@@ -120,6 +119,7 @@ export function App() {
   const [lastLoadedUpdatedAt, setLastLoadedUpdatedAt] = useState<string | null>(null);
   const [agentAuth, setAgentAuth] = useState<AgentAuthStatus | null>(null);
   const [agentAuthLoading, setAgentAuthLoading] = useState(true);
+  const [agentManageOpen, setAgentManageOpen] = useState(false);
   const [pendingLocalComment, setPendingLocalComment] = useState<Comment | null>(null);
   const [editMode, setEditMode] = useState(false);
   const [editBody, setEditBody] = useState('');
@@ -331,6 +331,13 @@ export function App() {
       : editBody !== artifact.markdown
     : false;
   const interactionLocked = loading || submitting || agentTurnPending || savingEdit || creatingDocument;
+  const agentConnectionState: AgentConnectionState = agentAuth?.state === 'connected'
+    ? 'connected'
+    : agentAuth?.state === 'connecting'
+      ? 'connecting'
+      : agentAuth?.state === 'expired' || agentAuth?.state === 'error'
+        ? 'error'
+        : 'disconnected';
 
   useEffect(() => {
     if (artifactPath === DRAFT_ARTIFACT_PATH) {
@@ -348,6 +355,17 @@ export function App() {
   useEffect(() => {
     void loadAgentAuthStatus();
   }, []);
+
+  useEffect(() => {
+    if (agentConnectionState === 'connecting' || agentConnectionState === 'error') {
+      setAgentManageOpen(true);
+      return;
+    }
+
+    if (agentConnectionState !== 'connected') {
+      setAgentManageOpen(false);
+    }
+  }, [agentConnectionState]);
 
   useEffect(() => {
     try {
@@ -1105,6 +1123,7 @@ export function App() {
       }
 
       setAgentAuth(payload.auth);
+      setAgentManageOpen(payload.auth.state === 'connecting');
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to start ChatGPT/Codex login.');
     }
@@ -1128,6 +1147,7 @@ export function App() {
       }
 
       setAgentAuth(payload.auth);
+      setAgentManageOpen(false);
     } catch (caughtError) {
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to disconnect ChatGPT/Codex.');
     }
@@ -1328,53 +1348,19 @@ export function App() {
           </div>
 
           <div className="workspace-menu-section workspace-menu-agent" role="region" aria-label="Agent controls">
-            <div
-              className={`workspace-agent-card workspace-agent-card-${agentAuth?.state === 'connected' ? 'connected' : agentAuth?.state === 'connecting' ? 'connecting' : 'disconnected'}`}
-            >
-              <div className="workspace-agent-card-row" role="group" aria-label="Agent connection">
-                <div className="workspace-agent-card-main">
-                  <span className="workspace-agent-badge">Agent</span>
-                  {agentAuth?.state === 'connecting' ? (
-                    <span className="discussion-rail-status discussion-rail-status-disconnected">
-                      {renderDrawerAgentStatusLabel(agentAuth, agentAuthLoading)}
-                    </span>
-                  ) : null}
-                </div>
-                {agentAuth?.state === 'connected' ? (
-                  <button
-                    className="secondary-button compact-button workspace-agent-action"
-                    type="button"
-                    onClick={() => void handleDisconnectAgent()}
-                    disabled={agentAuthLoading || interactionLocked}
-                  >
-                    {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
-                  </button>
-                ) : agentAuth?.state !== 'connecting' ? (
-                  <button
-                    className="secondary-button compact-button workspace-agent-action"
-                    type="button"
-                    onClick={() => void handleConnectAgent()}
-                    disabled={agentAuthLoading || interactionLocked}
-                  >
-                    {renderDrawerAgentActionLabel(agentAuth, agentAuthLoading)}
-                  </button>
-                ) : null}
-              </div>
-
-              {agentAuth?.state === 'connecting' ? (
-                <div className="agent-connect-flow">
-                  <p className="agent-connect-copy">
-                    Open{' '}
-                    <a href={agentAuth.authUrl} target="_blank" rel="noreferrer">
-                      {agentAuth.authUrl ?? 'the device login page'}
-                    </a>{' '}
-                    and enter:
-                  </p>
-                  <p className="agent-device-code">{agentAuth.code ?? 'Waiting for code…'}</p>
-                  <p className="context-subtle">Workshop will notice once the login finishes.</p>
-                </div>
-              ) : null}
-            </div>
+            <AgentConnectionStatus
+              providerName="Codex"
+              connectionState={agentConnectionState}
+              accountLabel={agentAuth?.accountLabel ?? null}
+              message={agentAuthLoading ? 'Checking connection…' : agentAuth?.message ?? (agentConnectionState === 'error' ? 'Reconnect Codex to continue workshop turns.' : null)}
+              authUrl={agentAuth?.authUrl}
+              deviceCode={agentAuth?.code ?? null}
+              actionDisabled={agentAuthLoading || interactionLocked}
+              manageOpen={agentManageOpen}
+              onManage={() => setAgentManageOpen((current) => !current)}
+              onConnect={() => void handleConnectAgent()}
+              onDisconnect={() => void handleDisconnectAgent()}
+            />
           </div>
 
           <div className="workspace-menu-section workspace-menu-recents" role="region" aria-label="Recent documents">
