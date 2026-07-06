@@ -76,6 +76,9 @@ Conversation turns can yield:
 - a proposal set
 - discussion plus a proposal set
 
+Conversation should be continuous across turns, not stateless.
+If the human establishes a review workflow such as "raise concerns and ask questions one at a time", the agent should preserve that mode until the human changes it.
+
 The discussion rail is the primary UI for this layer.
 
 ### 2. Proposal Layer
@@ -185,6 +188,25 @@ Recommended revision item metadata:
 The model always gets full document context unless a future practical limit forces a fallback.
 
 Scope still matters, but as product guidance rather than context exclusion.
+
+### Future PRD Placeholder: Token And Context Management
+
+Not part of the current v1 slice, but Workshop should eventually define a dedicated PRD for token and context management.
+
+That future PRD should answer questions like:
+
+- when full document plus full discussion thread should remain the default
+- when very old discussion should be summarized, compacted, or truncated
+- how to preserve continuity for long-running document workflows without degrading agent judgment
+- whether prompt structure should be optimized for cache reuse by separating stable document context from rolling conversation context
+- what observability should exist around prompt size, truncation decisions, cache behavior, and quality regressions
+
+Current direction:
+
+- prefer full document context
+- prefer full discussion-thread continuity
+- delay compaction logic until real prompt-size or quality limits justify the added complexity
+ 
 
 Supported focus modes:
 
@@ -348,6 +370,12 @@ Request:
   "prompt": "Turn this part into a tighter bulleted list."
 }
 ```
+
+Implementation note:
+
+- the transport request can stay small, but the server-side turn contract should include recent document discussion so the model can preserve conversational continuity
+- for the current implementation, that means passing recent human and agent messages with author, body, section anchor when present, and timestamp metadata
+- the model should treat persistent review instructions from that thread as still active unless the human changes them explicitly
 
 Response:
 
@@ -1084,6 +1112,7 @@ Current implementation note:
 - the history panel now shows an explicit saved revision count and marks the current entry as the current document state
 - current and non-current revision rows now carry clearer accessibility labels for revision order, current-state status, and restore actions
 - on phone-sized layouts, the `reader-bar` can wrap onto a second line so long document titles and controls do not collide in one forced row
+- the first-pass history rows can also stack their summaries, badges, and restore actions so revision controls stay legible on phones
 
 ### Suggested First `Review changes` Behavior
 
@@ -1141,6 +1170,25 @@ This keeps the loop coherent:
 - some turns help by discussing or asking
 - some turns help by proposing edits
 - the UI reflects that difference cleanly without making discussion-only turns feel broken
+
+### Suggested First Persistent Review Workflow
+
+The first implementation should support a lightweight persistent review mode where the human asks the agent to raise concerns and ask questions one at a time.
+
+Recommended first-pass behavior:
+
+1. when the human sets that workflow, preserve it across later agent turns by including recent discussion in the turn context
+2. while unresolved concerns remain, prefer discussion-only turns with `proposalSet = null`
+3. ask exactly one concrete unresolved question per turn instead of returning a list of multiple open questions
+4. when the human asks what to discuss next, choose the single most important unresolved concern and ask it directly
+5. once the human's answer clearly resolves a document decision, either ask the next unresolved question or return one focused proposal that records the resolution in the document
+
+Practical rules:
+
+- do not reset into generic critique mode every turn
+- do not answer "what next?" with a menu unless the human explicitly asks for the whole agenda
+- do not propose meta-edits that merely restate open questions while the review workflow is still conversational
+- do not treat conversational agreement alone as enough to close a question when the human said it should only count as resolved once the document is updated
 
 ### Suggested First Focused-Section UI Cue
 

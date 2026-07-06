@@ -13,6 +13,9 @@ The loop is:
 5. let the agent revise the underlying file
 6. review the updated result and revision history
 
+That review step should happen from the document view itself, with explicit revision cues and a lightweight history panel rather than a detached history mode.
+The agent turn should also carry enough recent discussion context that the loop feels continuous instead of resetting every turn.
+
 ## Hard Constraints
 
 - local-first
@@ -22,6 +25,7 @@ The loop is:
 - Markdown first
 - single human + single agent is enough for v0
 - the document stays primary throughout the loop
+- recent discussion continuity should survive across agent turns
 
 ## Proposed Stack
 
@@ -115,6 +119,7 @@ Fields:
 - `threadId`
 - `authorType` (`human` or `agent`)
 - `body`
+- `sectionId`
 - `createdAt`
 
 ### Revision
@@ -146,6 +151,7 @@ Fields:
 2. view its existing thread or create a new one
 3. ask for a change, critique, rewrite, or refinement
 4. show thread state immediately
+5. carry the recent thread back into the next agent turn so the conversation does not reset
 
 ### Flow 3: Agent Applies Revision
 
@@ -154,6 +160,7 @@ Fields:
 3. Workshop reparses the file
 4. UI shows updated rendered content
 5. revision entry and diff are recorded
+6. the latest revision summary, `Undo last`, and direct per-revision `Restore` remain available from the document view
 
 ## URL Shape
 
@@ -192,6 +199,13 @@ Implications for v0:
 - path resolution belongs at the server boundary, not in the shared human-facing flow
 - document metadata should support reload/revision awareness
 - the returned link should be the primary object an agent shares back into chat
+- phone-sized document controls and revision rows should remain legible without horizontal crowding
+- recent human and agent discussion should remain available to the turn runner so persistent review workflows do not collapse into stateless prompt/response turns
+
+Future PRD placeholder:
+
+- define a separate token-and-context-management PRD once full-document plus full-thread handoff approaches practical limits
+- keep the default simple until then: full document, full discussion continuity, no early compaction heuristics
 
 ## Minimal Compelling v1 Agent Loop
 

@@ -181,7 +181,7 @@ Success criteria:
 1. user opens a document
 2. user selects document scope or section scope
 3. user chooses a supported action
-4. Workshop sends the request to the server runtime
+4. Workshop sends the request to the server runtime, including the current prompt plus the recent document discussion needed for continuity
 5. server uses the authenticated Codex provider binding
 6. result comes back into Workshop
 7. the UI renders the result in a document-first way
@@ -190,6 +190,7 @@ Success criteria:
 
 - the turn is run using the connected account
 - the result is visible in context
+- ongoing review workflows can continue coherently across turns instead of resetting into stateless prompt/response behavior
 - failure states are understandable
 
 ### Flow 4: Disconnect Account
@@ -267,9 +268,9 @@ Recommended endpoints or equivalent server actions:
 - `GET /api/agent/auth-status`
 - `POST /api/agent/connect`
 - `POST /api/agent/disconnect`
-- `POST /api/agent/actions/rewrite-section`
+- `POST /api/agent/turn`
 
-If `critique_document` is chosen instead of `rewrite_section`, substitute accordingly.
+The first real turn may still be biased toward `rewrite_section` or `critique_document`, but the transport should support document-context discussion plus optional proposal results rather than a one-off narrow action wrapper.
 
 ### 4. Storage Boundary
 
@@ -377,8 +378,9 @@ This PRD is satisfied when all of the following are true:
 3. Workshop can detect missing, valid, expired, and failed auth states.
 4. Workshop can run at least one real document-native agent action using that connected account.
 5. The result appears back inside the Workshop document workflow.
-6. Workshop can disconnect and clear the stored auth.
-7. No shared developer API key is required for the v1 path.
+6. Recent document discussion can be carried into the authenticated turn so clarifying-question and one-question-at-a-time review workflows remain coherent.
+7. Workshop can disconnect and clear the stored auth.
+8. No shared developer API key is required for the v1 path.
 
 ## Implementation Guidance For The Coding Agent
 
@@ -401,4 +403,3 @@ The important win is:
 
 - a real user-owned connected account
 - one real Codex-backed document turn
-

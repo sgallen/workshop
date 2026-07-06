@@ -25,6 +25,8 @@ Current chat tools break down when document work gets real:
 
 Workshop exists to make document refinement feel natural instead of improvised.
 
+That includes preserving discussion continuity inside the document loop rather than treating every agent turn like a fresh stateless prompt.
+
 ## How It Works
 
 The flow is simple:
@@ -75,7 +77,9 @@ In the current v0 loop, that handoff should be explicit and lightweight:
 
 - the shareable object is a stable document URL, not a raw machine path
 - the document view keeps repo-relative identity visible in the `reader-bar`
-- the document view shows lightweight revision cues without leaving the document, including a compact `View history` panel and a latest-revision summary that can reopen it directly
+- the document view shows lightweight revision cues without leaving the document, including a compact `View history` panel, a latest-revision summary that can reopen it directly, and explicit `Undo last` / per-revision `Restore` actions
+- on phone-sized layouts, both the `reader-bar` and revision-history rows can stack cleanly instead of forcing titles, badges, and restore controls into one cramped line
+- discussion continuity should survive across turns, including review workflows where the agent raises concerns and asks exactly one concrete next question at a time until the human changes mode
 - if the file changes on disk underneath the page, reload stays explicit and visible
 - stale proposal/apply surfaces should explain that trust has degraded until reload
 

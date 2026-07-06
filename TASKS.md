@@ -27,7 +27,7 @@ Keep the shared task board for cross-project coordination and repo-level priorit
   - Opening or resuming a document session feels stable and explicit.
   - File changes outside the page can be detected and reloaded cleanly.
   - Revision/history behavior is understandable from the document view.
-  - The agent-facing handoff contract is explicit enough that opening a document in Workshop does not depend on Scott-specific path knowledge leaking into the user experience.
+  - The agent-facing handoff contract is explicit enough that opening a document in Workshop does not depend on Scott-specific path knowledge leaking into the user experience, and recent discussion continuity survives across agent turns.
   - The v1 agent loop is concrete enough to guide implementation instead of more abstract product discussion.
 - **Key files:**
   - `server/server.ts`
@@ -39,7 +39,8 @@ Keep the shared task board for cross-project coordination and repo-level priorit
 - **Current focus:**
   - Keep the document-centric handoff explicit in product copy and UI.
   - Preserve explicit freshness/reload cues across header, discussion, and proposal-review surfaces.
-  - Keep revision awareness legible from the document view without forcing a separate history workflow.
+  - Keep recent discussion continuity explicit in the agent-turn contract, including one-question-at-a-time review workflows that persist until the human changes mode.
+  - Keep revision awareness legible from the document view without forcing a separate history workflow, including on phone-sized layouts.
   - Treat the compact `View history` panel, latest-revision jump path, `Undo last`, and direct history-item restore as the baseline revision-history affordance.
   - Define the minimum useful agent actions for v1.
   - Keep `docs/agent-editing-v1-blueprint.md` aligned with the implementation as the slice sharpens.

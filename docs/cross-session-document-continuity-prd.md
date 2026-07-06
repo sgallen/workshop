@@ -88,6 +88,7 @@ Workshop must preserve important context as part of the document's durable state
 Candidate durable context includes:
 
 - comments
+- recent section-anchored discussion messages
 - proposal summaries
 - accepted/rejected outcomes
 - revisions
@@ -116,6 +117,7 @@ Requirements:
 - new discussion can begin from the current document state
 - the system should not depend on the original session identifier to function meaningfully
 - any needed durable context should be available from document state
+- a fresh agent turn should be able to recover the recent discussion needed to preserve active review mode or unresolved question flow
 
 ### 4. Clear Boundaries Between Durable and Ephemeral
 
@@ -186,16 +188,18 @@ Document continuity must be grounded in document-owned state rather than only ex
 
 The data model should allow future compact resume summaries without needing to re-derive everything from raw free-form text.
 
+For the current slice, that likely means preserving a durable recent-discussion subset with section anchors and timestamps rather than depending on a full raw transcript replay.
+
 ### 3. Compatibility With Checkpoints and Revisions
 
 Cross-session continuity should build on revisions, checkpoints, and proposal outcomes rather than sidestep them.
 
 ## Open Questions
 
-- Should Workshop preserve the full discussion rail per document, or only a distilled subset?
+- Should Workshop preserve the full discussion rail per document, or is a durable recent-discussion subset plus proposal/revision history enough for v1?
 - Should there be a dedicated `Resume where you left off` summary surface?
-- What is the smallest durable context that still makes resumption feel intelligent?
-- Should unresolved discussion questions become a first-class durable object?
+- What is the smallest durable context that still makes resumption feel intelligent beyond recent section-anchored comments, proposal state, and revision history?
+- Should unresolved discussion questions become a first-class durable object, or remain inferred from recent comments and pending proposal state for now?
 
 ## Product Test
 

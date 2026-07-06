@@ -125,6 +125,7 @@ Requirements:
   - enter manual edit mode
   - open the discussion rail
   - ask the agent for a first draft or outline
+- if the user starts with agent discussion, that conversation should continue through later turns instead of resetting once the document is no longer blank
 - first-open UI should feel calm and lightweight, not like a setup flow
 
 ### 5. Consistent File-Backed Initialization
@@ -184,6 +185,7 @@ Success criteria:
 2. user leaves the initial content mostly minimal
 3. user asks the agent for a first draft or outline
 4. Workshop uses the normal discussion/proposal flow
+5. follow-up drafting or review turns keep the recent discussion context so the drafting workflow can continue coherently
 
 Success criteria:
 

@@ -52,6 +52,7 @@ The human opens the link on phone or laptop and comments on specific sections or
 The agent revises the actual underlying file.
 
 The pair continue until the document is polished.
+Discussion continuity survives across turns instead of resetting every time the agent responds.
 
 ### 2. Existing document -> refinement
 
@@ -64,6 +65,8 @@ The human reviews, comments, and steers changes in context.
 The agent updates the real file.
 
 Revision history stays attached to the document instead of being lost inside chat.
+The human can inspect that history directly from the document view, including lightweight `Undo last` and per-revision `Restore` actions.
+If the human wants a one-question-at-a-time review flow, that discussion mode should persist until the human changes it.
 
 ## Product Shape
 
@@ -141,6 +144,15 @@ Focus on:
 - diffs and revision history
 - Tailscale-friendly access
 - simple link-based handoff from chat
+
+In the current v0 loop, revision state should stay explicit from the document view itself:
+
+- the document header should keep identity and revision cues visible
+- a compact `View history` panel should stay one tap away instead of becoming a separate workspace
+- the latest revision summary should reopen history directly
+- `Undo last` and direct per-revision `Restore` should be easy to find
+- on phone-sized layouts, revision rows and document controls should stack cleanly rather than crowding into one forced line
+- recent discussion should stay in turn context so clarifying-question workflows do not collapse into stateless prompt/response turns
 
 The key thing v0 must prove is not "can we render docs nicely."
 
