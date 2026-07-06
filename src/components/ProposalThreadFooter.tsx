@@ -4,6 +4,7 @@ type ProposalThreadFooterProps = {
   activeProposalTargetCount: number;
   interactionLocked: boolean;
   hasStalePendingProposals: boolean;
+  remoteUpdateLabel: string | null;
   loading: boolean;
   onReject: () => void | Promise<void>;
   onAccept: () => void | Promise<void>;
@@ -14,6 +15,7 @@ export function ProposalThreadFooter({
   activeProposalTargetCount,
   interactionLocked,
   hasStalePendingProposals,
+  remoteUpdateLabel,
   loading,
   onReject,
   onAccept,
@@ -53,6 +55,7 @@ export function ProposalThreadFooter({
         <div className="proposal-inline-status" role="status" aria-live="polite">
           <span className="status-pill status-pill-warning">Reload required</span>
           <span className="context-subtle">Reload before accepting these changes.</span>
+          {remoteUpdateLabel ? <span className="context-subtle">{remoteUpdateLabel}</span> : null}
           <button
             className="text-button"
             type="button"

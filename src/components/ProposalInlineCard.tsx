@@ -5,6 +5,7 @@ type ProposalInlineCardProps = {
   proposalRenderedHtml: string;
   interactionLocked: boolean;
   hasStalePendingProposals: boolean;
+  remoteUpdateLabel: string | null;
   loading: boolean;
   onSetCompareMode: (mode: 'original' | 'proposed') => void;
   onReject: () => void | Promise<void>;
@@ -19,6 +20,7 @@ export function ProposalInlineCard({
   proposalRenderedHtml,
   interactionLocked,
   hasStalePendingProposals,
+  remoteUpdateLabel,
   loading,
   onSetCompareMode,
   onReject,
@@ -84,6 +86,7 @@ export function ProposalInlineCard({
         <div className="proposal-inline-status" role="status" aria-live="polite">
           <span className="status-pill status-pill-warning">Reload required</span>
           <span className="context-subtle">Reload the document before accepting this proposal.</span>
+          {remoteUpdateLabel ? <span className="context-subtle">{remoteUpdateLabel}</span> : null}
           <button className="text-button" type="button" disabled={interactionLocked} onClick={() => void onReloadDocument()}>
             {loading ? 'Reloading…' : 'Reload'}
           </button>

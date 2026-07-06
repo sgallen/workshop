@@ -300,6 +300,35 @@ function appendRevision(store: Store, relativePath: string, revision: RevisionRe
   artifactStore.getRevisions(store, relativePath).push(revision);
 }
 
+function getUndoTargetRevision(store: Store, relativePath: string): {
+  latestRevision: RevisionRecord;
+  targetRevision: RevisionRecord;
+} {
+  const revisions = artifactStore.getRevisions(store, relativePath);
+
+  if (revisions.length < 2) {
+    throw new Error('nothing_to_undo');
+  }
+
+  const latestRevision = revisions[revisions.length - 1];
+  const targetRevision = revisions[revisions.length - 2];
+
+  return {
+    latestRevision,
+    targetRevision
+  };
+}
+
+function getRevisionById(store: Store, relativePath: string, revisionId: string): RevisionRecord {
+  const revision = artifactStore.getRevisions(store, relativePath).find((candidate) => candidate.id === revisionId);
+
+  if (!revision) {
+    throw new Error('invalid_request');
+  }
+
+  return revision;
+}
+
 async function loadArtifactPayload(relativePath: string): Promise<Artifact> {
   return documentService.loadArtifact(relativePath);
 }
@@ -516,6 +545,8 @@ function toErrorMessage(error: unknown): string {
       return 'Workshop could not safely apply that proposal. The document was restored.';
     case 'stale_document':
       return 'This document changed while you were editing. Reload before saving.';
+    case 'nothing_to_undo':
+      return 'There is no earlier saved revision to undo to yet.';
     default:
       return error.message || 'Request failed.';
   }
@@ -811,6 +842,93 @@ app.post('/api/artifact/save', async (request: Request, response: Response) => {
 
     const state = await buildProposalMutationResult(relativePath, revision);
     response.json(state);
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
+app.post('/api/revisions/undo-last', async (request: Request, response: Response) => {
+  try {
+    const artifactPath = String(request.body?.path ?? '');
+    const { absolutePath, relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const currentStore = await artifactStore.readStore();
+    const activeProposalSet = getActiveProposalSet(currentStore, relativePath);
+
+    if (activeProposalSet) {
+      throw new Error('invalid_request');
+    }
+
+    const { latestRevision, targetRevision } = getUndoTargetRevision(currentStore, relativePath);
+    const originalMarkdown = await fs.readFile(absolutePath, 'utf8');
+
+    if (originalMarkdown !== latestRevision.markdown) {
+      throw new Error('proposal_conflict');
+    }
+
+    const revision: RevisionRecord = {
+      id: createId('rev'),
+      documentId: relativePath,
+      createdAt: new Date().toISOString(),
+      summary: `Undo ${latestRevision.summary}`,
+      source: 'restore_revision',
+      proposalSetId: latestRevision.proposalSetId,
+      markdown: targetRevision.markdown
+    };
+
+    appendRevision(currentStore, relativePath, revision);
+    await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, targetRevision.markdown, currentStore);
+    await syncArtifactRecency(currentStore, relativePath);
+
+    response.json(await buildProposalMutationResult(relativePath, revision));
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
+app.post('/api/revisions/:revisionId/restore', async (request: Request, response: Response) => {
+  try {
+    const artifactPath = String(request.body?.path ?? '');
+    const { absolutePath, relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const currentStore = await artifactStore.readStore();
+    const activeProposalSet = getActiveProposalSet(currentStore, relativePath);
+
+    if (activeProposalSet) {
+      throw new Error('invalid_request');
+    }
+
+    const targetRevision = getRevisionById(currentStore, relativePath, String(request.params.revisionId));
+    const latestRevisions = listLatestRevisions(currentStore, relativePath);
+    const latestRevision = latestRevisions[0] ?? null;
+
+    if (!latestRevision || latestRevision.id === targetRevision.id) {
+      throw new Error('invalid_request');
+    }
+
+    const originalMarkdown = await fs.readFile(absolutePath, 'utf8');
+
+    if (originalMarkdown !== latestRevision.markdown) {
+      throw new Error('proposal_conflict');
+    }
+
+    const revision: RevisionRecord = {
+      id: createId('rev'),
+      documentId: relativePath,
+      createdAt: new Date().toISOString(),
+      summary: `Restore ${targetRevision.summary}`,
+      source: 'restore_revision',
+      proposalSetId: targetRevision.proposalSetId,
+      markdown: targetRevision.markdown
+    };
+
+    appendRevision(currentStore, relativePath, revision);
+    await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, targetRevision.markdown, currentStore);
+    await syncArtifactRecency(currentStore, relativePath);
+
+    response.json(await buildProposalMutationResult(relativePath, revision));
   } catch (error) {
     response.status(400).json({
       error: toErrorMessage(error)

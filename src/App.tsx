@@ -2,6 +2,7 @@ import { FormEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useSta
 import { marked } from 'marked';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPenToSquare } from '@fortawesome/free-regular-svg-icons';
+import { faArrowUp, faCircleNotch } from '@fortawesome/free-solid-svg-icons';
 import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
 import type { Artifact, Comment, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
 import { formatArtifactTimestamp, formatRecentActivity } from './lib/formatting';
@@ -92,6 +93,36 @@ type AgentTurnPayload = ArtifactPayload & {
   }>;
 };
 
+function describeRevisionSource(source: RevisionRecord['source']): string {
+  switch (source) {
+    case 'proposal_item_accept':
+      return 'Accepted change';
+    case 'proposal_set_accept_all':
+      return 'Accepted all';
+    case 'restore_revision':
+      return 'Restored revision';
+    case 'manual_save':
+      return 'Manual save';
+    default:
+      return 'Revision';
+  }
+}
+
+function getRevisionSourceBadgeLabel(source: RevisionRecord['source']): string {
+  switch (source) {
+    case 'proposal_item_accept':
+      return 'Accept';
+    case 'proposal_set_accept_all':
+      return 'Accept all';
+    case 'restore_revision':
+      return 'Restore';
+    case 'manual_save':
+      return 'Manual';
+    default:
+      return 'Revision';
+  }
+}
+
 function WorkshopWordmark() {
   return (
     <p className="workspace-brand-name" aria-label="Workshop">
@@ -123,7 +154,7 @@ export function App() {
   const [recentArtifacts, setRecentArtifacts] = useState<RecentArtifact[]>([]);
   const [activeProposalSet, setActiveProposalSet] = useState<ProposalSetRecord | null>(null);
   const [proposalHistory, setProposalHistory] = useState<ProposalSetRecord[]>([]);
-  const [, setRevisions] = useState<RevisionRecord[]>([]);
+  const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [composerBody, setComposerBody] = useState('');
@@ -147,7 +178,8 @@ export function App() {
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const [draftDocumentTitle, setDraftDocumentTitle] = useState('');
   const [creatingDocument, setCreatingDocument] = useState(false);
-  const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+  const [highlightedRevisionId, setHighlightedRevisionId] = useState<string | null>(null);
 
   function getComposerDraftStorageKey(path: string) {
     return `${COMPOSER_DRAFT_STORAGE_PREFIX}${path}`;
@@ -287,6 +319,13 @@ export function App() {
   const remoteUpdateLabel = hasRemoteUpdate && remoteUpdatedAt
     ? `Newer version saved ${formatArtifactTimestamp(remoteUpdatedAt)}`
     : null;
+  const historyActionNotice = hasPendingProposal
+    ? 'Resolve the pending proposal before changing document history.'
+    : hasRemoteUpdate
+      ? 'Reload the document before using undo or restore.'
+      : revisions.length < 2
+        ? 'Undo becomes available after there is an earlier saved revision to return to.'
+        : null;
   const reviewStateLabel = activeProposalSet
     ? `${pendingProposalCount} ${pendingProposalCount === 1 ? 'change' : 'changes'}`
     : null;
@@ -340,6 +379,8 @@ export function App() {
     : activeProposalSet
       ? 'Nudge this proposal closer...'
       : 'Kick off the next move...';
+  const composerReadyToSend = composerBody.trim().length > 0;
+  const composerWorking = submitting || agentTurnPending;
   const hasUnsavedEditChanges = editMode && artifact
     ? isDraftDocument
       ? Boolean(draftDocumentTitle.trim())
@@ -390,20 +431,6 @@ export function App() {
       setAgentManageOpen(false);
     }
   }, [agentConnectionState]);
-
-  useEffect(() => {
-    if (!handoffNotice) {
-      return;
-    }
-
-    const timeoutId = window.setTimeout(() => {
-      setHandoffNotice(null);
-    }, 2400);
-
-    return () => {
-      window.clearTimeout(timeoutId);
-    };
-  }, [handoffNotice]);
 
   useEffect(() => {
     try {
@@ -630,7 +657,13 @@ export function App() {
     });
   }, [railOpen, displayedConversationComments.length, agentTurnPending]);
 
-  function applyArtifactPayload(payload: ArtifactPayload | ProposalMutationResult) {
+  function applyArtifactPayload(
+    payload: ArtifactPayload | ProposalMutationResult,
+    options?: {
+      highlightedRevisionId?: string | null;
+      keepHistoryOpen?: boolean;
+    }
+  ) {
     if (!payload.artifact) {
       return;
     }
@@ -648,7 +681,8 @@ export function App() {
     setPendingLocalComment(null);
     setEditBaseUpdatedAt(nextArtifact.updatedAt);
     setEditNotice(null);
-    setHandoffNotice(null);
+    setHistoryOpen(options?.keepHistoryOpen ?? false);
+    setHighlightedRevisionId(options?.highlightedRevisionId ?? null);
     setDraftDocumentTitle('');
     setAttachedSectionId((current) => (current && nextArtifact.sections.some((section) => section.id === current) ? current : null));
     setArtifactPath(nextArtifact.relativePath);
@@ -677,6 +711,20 @@ export function App() {
       setRecentArtifacts([]);
     }
   }
+
+  useEffect(() => {
+    if (!highlightedRevisionId) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setHighlightedRevisionId((current) => (current === highlightedRevisionId ? null : current));
+    }, 2800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [highlightedRevisionId]);
 
   async function loadArtifact(nextPath: string, options?: { preserveCurrentOnError?: boolean }) {
     const preserveCurrentOnError = options?.preserveCurrentOnError ?? false;
@@ -810,6 +858,7 @@ export function App() {
     setDraftDocumentTitle('');
     setAttachedSectionId(null);
     setComposerBody('');
+    setHistoryOpen(false);
     setArtifactPath(normalizedPath);
   }
 
@@ -900,6 +949,45 @@ export function App() {
     await loadArtifact(resolvedArtifactPath, { preserveCurrentOnError: true });
   }
 
+  async function handleRestoreRevision(revisionId: string) {
+    if (interactionLocked || editMode || !resolvedArtifactPath || hasPendingProposal || hasRemoteUpdate) {
+      return;
+    }
+
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/revisions/${encodeURIComponent(revisionId)}/restore`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          path: resolvedArtifactPath
+        })
+      });
+      const payload = await readJsonResponse<(ProposalMutationResult & { error?: string })>(response);
+
+      if (!response.ok || !payload.artifact) {
+        throw new Error(payload.error ?? 'Failed to restore that revision.');
+      }
+
+      applyArtifactPayload(payload, {
+        highlightedRevisionId: payload.appliedRevision?.id ?? null,
+        keepHistoryOpen: Boolean(payload.appliedRevision)
+      });
+      void loadRecents();
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : 'Failed to restore that revision.';
+
+      if (message.includes('no longer matches the current document')) {
+        setHasRemoteUpdate(true);
+      }
+
+      setError(message);
+    }
+  }
+
   function handleOpenCreateDocument() {
     if (interactionLocked || editMode) {
       return;
@@ -915,6 +1003,7 @@ export function App() {
     setActiveProposalSet(null);
     setProposalHistory([]);
     setRevisions([]);
+    setHistoryOpen(false);
     setLastLoadedUpdatedAt(null);
     setHasRemoteUpdate(false);
     setRemoteUpdatedAt(null);
@@ -947,6 +1036,7 @@ export function App() {
     setEditBaseUpdatedAt(null);
     setEditNotice(null);
     setRevisions([]);
+    setHistoryOpen(false);
     setError(null);
     const params = new URLSearchParams(window.location.search);
     params.delete('draft');
@@ -1015,6 +1105,7 @@ export function App() {
       setEditBaseUpdatedAt(null);
       setEditNotice(null);
       setEditMode(true);
+      setHistoryOpen(false);
       setRailOpen(false);
       setMenuOpen(false);
       return;
@@ -1029,6 +1120,7 @@ export function App() {
     setEditBaseUpdatedAt(artifact.updatedAt);
     setEditNotice(null);
     setEditMode(true);
+    setHistoryOpen(false);
     setRailOpen(false);
     setMenuOpen(false);
   }
@@ -1104,7 +1196,10 @@ export function App() {
         throw new Error(payload.error ?? 'Failed to save edit.');
       }
 
-      applyArtifactPayload(payload);
+      applyArtifactPayload(payload, {
+        highlightedRevisionId: payload.appliedRevision?.id ?? null,
+        keepHistoryOpen: Boolean(payload.appliedRevision)
+      });
       setEditMode(false);
       setEditBody(payload.artifact.markdown);
       setEditBaseUpdatedAt(payload.artifact.updatedAt);
@@ -1231,7 +1326,10 @@ export function App() {
         throw new Error(payload.error ?? 'Failed to update the proposal.');
       }
 
-      applyArtifactPayload(payload);
+      applyArtifactPayload(payload, {
+        highlightedRevisionId: payload.appliedRevision?.id ?? null,
+        keepHistoryOpen: Boolean(payload.appliedRevision)
+      });
       void loadRecents();
     } catch (caughtError) {
       const message = caughtError instanceof Error ? caughtError.message : 'Failed to update the proposal.';
@@ -1584,34 +1682,32 @@ export function App() {
                       </button>
                     </>
                   ) : !isDraftDocument ? (
-                    <div className="reader-actions-cluster">
-                      <div className="reader-mode-switch" role="group" aria-label="Document mode">
-                        <button
-                          className={`secondary-button compact-button reader-rail-button reader-mode-button${!railOpen ? ' reader-mode-button-active' : ''}`}
-                          type="button"
-                          disabled={interactionLocked || hasPendingProposal}
-                          title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
-                          aria-pressed={!railOpen}
-                          onClick={() => {
-                            setRailOpen(false);
-                            handleEnterEditMode();
-                          }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          className={`secondary-button compact-button reader-rail-button reader-mode-button${railOpen ? ' reader-mode-button-active' : ''}`}
-                          type="button"
-                          disabled={interactionLocked}
-                          aria-pressed={railOpen}
-                          onClick={() => {
-                            setMenuOpen(false);
-                            setRailOpen(true);
-                          }}
-                        >
-                          Discuss
-                        </button>
-                      </div>
+                    <div className="reader-mode-switch" role="group" aria-label="Document mode">
+                      <button
+                        className={`secondary-button compact-button reader-rail-button reader-mode-button${!railOpen ? ' reader-mode-button-active' : ''}`}
+                        type="button"
+                        disabled={interactionLocked || hasPendingProposal}
+                        title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
+                        aria-pressed={!railOpen}
+                        onClick={() => {
+                          setRailOpen(false);
+                          handleEnterEditMode();
+                        }}
+                      >
+                        Edit
+                      </button>
+                      <button
+                        className={`secondary-button compact-button reader-rail-button reader-mode-button${railOpen ? ' reader-mode-button-active' : ''}`}
+                        type="button"
+                        disabled={interactionLocked}
+                        aria-pressed={railOpen}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setRailOpen(true);
+                        }}
+                      >
+                        Discuss
+                      </button>
                     </div>
                   ) : null}
                 </div>
@@ -1637,6 +1733,81 @@ export function App() {
                 />
               ) : null}
             </header>
+
+            {!editMode && !isDraftDocument && historyOpen ? (
+              <section className="history-panel" role="region" aria-label="Revision history">
+                <div className="history-panel-header">
+                  <div>
+                    <p className="proposal-kicker">Document history</p>
+                    <h2 className="history-panel-title">Revision history</h2>
+                    <p className="history-panel-count">
+                      {revisions.length} {revisions.length === 1 ? 'saved revision' : 'saved revisions'}
+                    </p>
+                  </div>
+                  <div className="history-panel-copy-block">
+                    <p className="history-panel-copy">
+                      History stays attached to the document. The newest saved state is always listed first.
+                    </p>
+                    {historyActionNotice ? (
+                      <p className="history-panel-note">{historyActionNotice}</p>
+                    ) : null}
+                  </div>
+                </div>
+                {revisions.length > 0 ? (
+                  <ol className="history-list">
+                    {revisions.map((revision, index) => {
+                      const revisionDetail = `${describeRevisionSource(revision.source)} · ${formatArtifactTimestamp(revision.createdAt)}`;
+
+                      return (
+                        <li
+                          key={revision.id}
+                          className={`history-item${index === 0 ? ' history-item-highlighted' : ''}${highlightedRevisionId === revision.id ? ' history-item-flash' : ''}`}
+                        >
+                          <div className="history-item-main">
+                            <p className="history-item-summary">{revision.summary}</p>
+                            <p className="history-item-detail">{revisionDetail}</p>
+                          </div>
+                          <div className="history-item-actions">
+                            <span className="meta-pill meta-pill-muted history-item-source-badge">
+                              {getRevisionSourceBadgeLabel(revision.source)}
+                            </span>
+                            {index === 0 ? (
+                              <span className="meta-pill meta-pill-success history-item-badge">Current</span>
+                            ) : (
+                              <>
+                                <span className="meta-pill meta-pill-muted history-item-distance-badge">{index} back</span>
+                                <button
+                                  className="secondary-button compact-button history-item-button"
+                                  type="button"
+                                  disabled={interactionLocked || hasPendingProposal || hasRemoteUpdate}
+                                  title={
+                                    hasPendingProposal
+                                      ? 'Resolve the pending proposal before restoring document history.'
+                                      : hasRemoteUpdate
+                                        ? 'Reload the document before restoring history.'
+                                        : undefined
+                                  }
+                                  onClick={() => void handleRestoreRevision(revision.id)}
+                                >
+                                  Restore
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ol>
+                ) : (
+                  <div className="history-empty-state">
+                    <p className="history-empty-title">No revisions yet.</p>
+                    <p className="context-subtle">
+                      Accepted agent changes and manual saves will appear here once the document starts changing.
+                    </p>
+                  </div>
+                )}
+              </section>
+            ) : null}
 
             <div
               className={`reader-layout${railOpen ? ' reader-layout-with-rail' : ''}`}
@@ -1754,6 +1925,7 @@ export function App() {
                               proposalRenderedHtml={proposalRenderedHtml ?? ''}
                               interactionLocked={interactionLocked}
                               hasStalePendingProposals={hasStalePendingProposals}
+                              remoteUpdateLabel={remoteUpdateLabel}
                               loading={loading}
                               onSetCompareMode={(mode) => setProposalCompareModeById((current) => ({ ...current, [proposalItem.id]: mode }))}
                               onReject={() => handleProposalMutation(`/api/proposals/${activeProposalSet?.id}/items/${proposalItem.id}/dismiss`)}
@@ -1852,6 +2024,7 @@ export function App() {
                                       activeProposalTargetCount={activeProposalTargetSectionIds.length}
                                       interactionLocked={interactionLocked}
                                       hasStalePendingProposals={hasStalePendingProposals}
+                                      remoteUpdateLabel={remoteUpdateLabel}
                                       loading={loading}
                                       onReject={() => handleProposalMutation(`/api/proposals/${activeProposalSet.id}/dismiss`)}
                                       onAccept={() => handleProposalMutation(`/api/proposals/${activeProposalSet.id}/accept-all`)}
@@ -1930,18 +2103,20 @@ export function App() {
                         placeholder={composerPlaceholder}
                       />
                       <button
-                        className="primary-button composer-submit"
+                        className={`primary-button composer-submit${composerWorking ? ' composer-submit-working' : ''}`}
                         type="submit"
-                        disabled={interactionLocked}
-                        aria-label={interactionLocked ? 'Sending message' : 'Send message'}
+                        disabled={interactionLocked || !composerReadyToSend}
+                        aria-label={composerWorking ? 'Agent working' : 'Send message'}
                       >
-                        {interactionLocked ? (
-                          <span className="pending-ellipsis pending-ellipsis-compact" aria-hidden="true">
-                            <span>.</span>
-                            <span>.</span>
-                            <span>.</span>
+                        {composerWorking ? (
+                          <span className="composer-submit-icon" aria-hidden="true">
+                            <FontAwesomeIcon icon={faCircleNotch} spin />
                           </span>
-                        ) : '➤'}
+                        ) : (
+                          <span className="composer-submit-icon" aria-hidden="true">
+                            <FontAwesomeIcon icon={faArrowUp} />
+                          </span>
+                        )}
                       </button>
                     </div>
                   </form>

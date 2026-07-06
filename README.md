@@ -71,6 +71,14 @@ The first version should stay narrow and prove the core loop well:
 - diffs and revision history
 - simple link-based handoff from chat or another tool
 
+In the current v0 loop, that handoff should be explicit and lightweight:
+
+- the shareable object is a stable document URL, not a raw machine path
+- the document view keeps repo-relative identity visible in the `reader-bar`
+- the document view shows lightweight revision cues without leaving the document, including a compact `View history` panel and a latest-revision summary that can reopen it directly
+- if the file changes on disk underneath the page, reload stays explicit and visible
+- stale proposal/apply surfaces should explain that trust has degraded until reload
+
 The first useful actions are likely:
 
 - critique this draft

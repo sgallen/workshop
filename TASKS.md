@@ -37,12 +37,12 @@ Keep the shared task board for cross-project coordination and repo-level priorit
   - `docs/v0-technical-plan.md`
   - `docs/project-brief.md`
 - **Current focus:**
-  - Clarify the product around agent-native document workshopping.
-  - Add explicit document metadata/reload behavior.
-  - Tighten document/session UI around revision awareness.
-  - Clarify the handoff shape from agent -> Workshop link -> human review.
+  - Keep the document-centric handoff explicit in product copy and UI.
+  - Preserve explicit freshness/reload cues across header, discussion, and proposal-review surfaces.
+  - Keep revision awareness legible from the document view without forcing a separate history workflow.
+  - Treat the compact `View history` panel, latest-revision jump path, `Undo last`, and direct history-item restore as the baseline revision-history affordance.
   - Define the minimum useful agent actions for v1.
-  - Convert the interaction model into an implementation-ready blueprint in `docs/agent-editing-v1-blueprint.md`.
+  - Keep `docs/agent-editing-v1-blueprint.md` aligned with the implementation as the slice sharpens.
 
 ### Ready
 

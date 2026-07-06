@@ -776,9 +776,11 @@ Recommended contract:
 4. the shareable object the agent sends back to the human is the stable document URL, not a raw local path
 5. opening that URL should land the human directly in the document view with:
    - current canonical document content
-   - document identity visible
+   - document identity visible in the `reader-bar`
+   - a lightweight copy/share action for the stable document URL
    - current freshness state available
    - current active proposal set and revision cues if they exist
+   - latest revision summary/count visible without leaving the document
 
 Recommended first response shape:
 
@@ -906,11 +908,14 @@ Recommended first-pass behavior:
    - `Reload required before apply`
 4. when `/api/artifact/meta` shows the file changed externally:
    - show a compact reload banner near the `reader-bar`
+   - include the newest known on-disk save time when available
    - keep the canonical document visible until the user reloads
 5. when there is no active pending proposal set:
    - the banner can offer a primary `Reload` action
 6. when there is an active pending proposal set:
    - the banner should explain that pending proposals may be stale
+   - the same stale cue should appear anywhere accept/apply is currently offered
+   - include the newest known on-disk save time when available
    - proposal accept actions should be blocked until reload or explicit conflict resolution
 
 Minimum useful banner contents:
@@ -940,19 +945,24 @@ The first implementation should make revision state legible from the document vi
 Recommended first-pass behavior:
 
 1. keep a compact revision status area in the `reader-bar`
-2. show the latest revision summary in a lightweight form when available
-3. expose one primary document-level history action:
-   - `Undo last`
-4. expose one secondary navigation action when revisions exist:
+2. show the latest revision summary in a lightweight form when available, and let that summary reopen history directly
+3. expose one secondary navigation action when revisions exist:
    - `View history`
+   - the first implementation can use a compact inline panel or sheet instead of a separate workspace
+4. expose one primary document-level recovery action:
+   - `Undo last`
 5. after accept or restore:
    - briefly highlight the newest revision cue
+   - briefly highlight the newest revision item if history is visible
    - keep the user in the document pane
 
 Minimum useful revision status contents:
 
 - latest revision summary or short label
 - latest revision timestamp or relative recency cue
+- revision count
+- repo-relative document identity near the same cluster
+- lightweight resume/share-link action for the current document URL
 - source label when it helps orientation
   - `agent`
   - `restore`
@@ -976,6 +986,7 @@ This keeps revision awareness aligned with the main product loop:
 
 - the document stays primary
 - the latest canonical state is understandable at a glance
+- history remains one tap away from the same revision cluster instead of becoming a detached mode
 - reversal of the most recent accepted change is easy without making history the dominant surface
 
 ### Suggested First Agent Availability UI
@@ -1061,6 +1072,14 @@ This keeps the first history UI proportional to the v1 goal:
 - revision history is available when needed
 - restoring is easy to find
 - the document remains the center of gravity
+
+Current implementation note:
+
+- the first-pass UI now exposes `View history` from the `reader-bar`
+- the latest revision summary in the same cluster can reopen that history panel directly
+- newly created latest revisions are briefly highlighted after save or accept
+- `Undo last` now exists as a document-level action when there is an earlier stored revision to return to
+- `Restore` now exists directly from non-latest revision items in the history panel
 
 ### Suggested First `Review changes` Behavior
 
