@@ -1080,6 +1080,10 @@ Current implementation note:
 - newly created latest revisions are briefly highlighted after save or accept
 - `Undo last` now exists as a document-level action when there is an earlier stored revision to return to
 - `Restore` now exists directly from non-latest revision items in the history panel
+- the history panel now explains when undo or restore are unavailable because of stale file state, pending proposals, or insufficient saved history
+- the history panel now shows an explicit saved revision count and marks the current entry as the current document state
+- current and non-current revision rows now carry clearer accessibility labels for revision order, current-state status, and restore actions
+- on phone-sized layouts, the `reader-bar` can wrap onto a second line so long document titles and controls do not collide in one forced row
 
 ### Suggested First `Review changes` Behavior
 

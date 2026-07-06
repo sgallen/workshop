@@ -42,10 +42,11 @@ It is confidence and optionality for document work.
 
 Prove one clear loop:
 
-1. user creates a named checkpoint before or after an important change
-2. user can later jump back to inspect or restore that state
-3. user can also choose to start an alternate branch from that checkpoint
-4. Workshop preserves the relationship between the current line of work and the alternate line
+1. user creates a checkpoint before or after an important change
+2. user can later jump back to inspect that state
+3. if user promotes that earlier state, Workshop records it as a new checkpointed state
+4. the immediately preceding state remains in history because it was already checkpointed
+5. Workshop preserves the relationship between the current line of work and the alternate or restored line
 
 If that loop feels understandable, Workshop can support deeper exploration without chaos.
 
@@ -80,14 +81,15 @@ Workshop should support that without making the product feel technical or intimi
 
 ### 1. Intentional Checkpoints
 
-Workshop must let the user create meaningful named waypoints.
+Workshop must let the user create meaningful waypoints that feel like entries in a revision history.
 
 Requirements:
 
 - a checkpoint can be created explicitly by the user
-- the user can optionally name or label it
+- each checkpoint is stamped with the date and time it was created
 - the checkpoint is attached to a concrete document state
 - checkpoint creation should be fast enough that users actually use it
+- the history UI should present checkpoints as a familiar revision history list
 
 ### 2. Clear Restore Model
 
@@ -96,7 +98,9 @@ Workshop must support safely returning to a previous checkpoint or revision stat
 Requirements:
 
 - restore should preserve history rather than erase it
-- the user should understand that restore creates a new current state from an older one
+- if the user promotes a restored state, Workshop should create a new checkpoint for that promotion
+- the user should understand that restore and promotion create a new current state from an older one
+- the pre-promotion current state should remain visible in history so nothing feels silently lost
 - the product should avoid ambiguous "did I lose my later work?" moments
 
 ### 3. Alternate Direction Support
@@ -106,8 +110,9 @@ Workshop must support branching from an earlier state.
 Requirements:
 
 - the user can intentionally start a new branch from a prior checkpoint
-- the relationship to the source checkpoint should remain visible
-- the product should make it clear which branch is current
+- the user can also promote a prior checkpoint into the current line of work
+- promotion should create a fresh checkpoint for the new current state, while keeping the source checkpoint and prior current state visible
+- the product should make it clear which branch or promoted line is current
 
 ### 4. Human-Understandable History
 
@@ -151,12 +156,14 @@ Success criteria:
 2. user selects an earlier checkpoint
 3. user previews or confirms restore
 4. Workshop restores that state as the current document
-5. Workshop preserves later history
+5. if the user promotes that state, Workshop records the promotion as a new checkpoint and keeps the immediately prior state in history
+6. Workshop preserves later history and makes the prior source state visible
 
 Success criteria:
 
 - the user feels safe restoring
 - later work is not perceived as silently deleted
+- a promoted checkpoint becomes a new checkpoint without losing the state that was just replaced
 
 ### Flow 3: Branch From a Checkpoint
 
@@ -228,8 +235,10 @@ This feature should build on the existing revision layer rather than inventing a
 
 This PRD is satisfied when all of the following are true:
 
-- a user can create a named checkpoint
+- a user can create a checkpoint that is identifiable by date and time
 - the user can return to a prior checkpoint safely
 - restore preserves history
+- promoting a prior checkpoint creates a new checkpointed current state
+- the state immediately before that promotion remains available in history
 - the user can start an alternate direction from an older state
 - the current branch or line of work remains understandable

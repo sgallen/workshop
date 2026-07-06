@@ -86,6 +86,7 @@ button {
 }
 
 .menu-trigger {
+  flex: 0 0 42px;
   width: 42px;
   min-width: 42px;
   height: 42px;
@@ -271,6 +272,7 @@ textarea.path-input {
 .reader-meta {
   display: grid;
   gap: 2px;
+  flex: 1 1 auto;
   min-width: 0;
 }
 
@@ -292,13 +294,18 @@ textarea.path-input {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex: 0 0 auto;
   flex-shrink: 0;
+  flex-wrap: nowrap;
 }
 
 .reader-mode-switch {
   display: inline-grid;
+  flex: 0 0 136px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0;
+  width: 136px;
+  min-width: 136px;
   border: 1px solid var(--surface-card-border);
   border-radius: var(--radius-sm);
   background: color-mix(in srgb, var(--surface-card) 88%, var(--surface-page-base) 12%);
@@ -311,6 +318,7 @@ textarea.path-input {
   border-radius: 0;
   background: transparent;
   box-shadow: none;
+  white-space: nowrap;
 }
 
 .reader-mode-button + .reader-mode-button {
@@ -2244,7 +2252,6 @@ textarea.path-input {
   }
 
   .reader-meta {
-    flex: 1 1 auto;
     min-width: 0;
   }
 
@@ -2259,13 +2266,13 @@ textarea.path-input {
     flex: 0 0 auto;
     flex-shrink: 0;
     flex-wrap: nowrap;
-    min-width: 0;
+    min-width: max-content;
   }
 
   .reader-mode-switch {
-    flex: 0 0 auto;
-    min-width: 0;
-    width: auto;
+    flex: 0 0 132px;
+    width: 132px;
+    min-width: 132px;
   }
 
   .reader-mode-button {
@@ -2285,6 +2292,32 @@ textarea.path-input {
   .reader-actions > .quiet-inline-action,
   .reader-actions > .proposal-review-button {
     flex: 0 0 auto;
+    white-space: nowrap;
+  }
+
+  .history-panel {
+    margin: 12px 0 0;
+    padding: 14px 14px 13px;
+    border-radius: 16px;
+  }
+
+  .history-panel-copy {
+    max-width: none;
+  }
+
+  .history-item {
+    flex-wrap: wrap;
+    padding: 13px 13px 12px;
+  }
+
+  .history-item-main {
+    flex: 1 1 100%;
+  }
+
+  .history-item-actions {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
   }
 
   .eyebrow {

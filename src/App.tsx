@@ -20,6 +20,9 @@ const DEFAULT_ARTIFACT_PATH = 'docs/project-brief.md';
 const COMPOSER_DRAFT_STORAGE_PREFIX = 'workshop:composer-draft:';
 const DRAFT_ARTIFACT_PATH = '__draft__/new-document.md';
 const DRAFT_ARTIFACT_TITLE = 'New document';
+const REVISION_HISTORY_PANEL_ID = 'workshop-revision-history';
+const REVISION_HISTORY_HEADING_ID = 'workshop-revision-history-heading';
+const REVISION_HISTORY_COUNT_ID = 'workshop-revision-history-count';
 const DEMO_RECENT_CANDIDATES: RecentArtifact[] = [
   {
     title: 'v0-technical-plan.md',
@@ -1647,7 +1650,12 @@ export function App() {
                     </span>
                   </button>
                   <div className="reader-meta">
-                    <p className="reader-title">{isDraftDocument ? (draftDocumentTitle.trim() || DRAFT_ARTIFACT_TITLE) : artifact.title}</p>
+                    <p
+                      className="reader-title"
+                      title={isDraftDocument ? (draftDocumentTitle.trim() || DRAFT_ARTIFACT_TITLE) : artifact.title}
+                    >
+                      {isDraftDocument ? (draftDocumentTitle.trim() || DRAFT_ARTIFACT_TITLE) : artifact.title}
+                    </p>
                   </div>
                 </div>
                 <div className="reader-actions" role="group" aria-label="Document actions">
@@ -1735,12 +1743,18 @@ export function App() {
             </header>
 
             {!editMode && !isDraftDocument && historyOpen ? (
-              <section className="history-panel" role="region" aria-label="Revision history">
+              <section
+                id={REVISION_HISTORY_PANEL_ID}
+                className="history-panel"
+                role="region"
+                aria-labelledby={REVISION_HISTORY_HEADING_ID}
+                aria-describedby={REVISION_HISTORY_COUNT_ID}
+              >
                 <div className="history-panel-header">
                   <div>
                     <p className="proposal-kicker">Document history</p>
-                    <h2 className="history-panel-title">Revision history</h2>
-                    <p className="history-panel-count">
+                    <h2 id={REVISION_HISTORY_HEADING_ID} className="history-panel-title">Revision history</h2>
+                    <p id={REVISION_HISTORY_COUNT_ID} className="history-panel-count">
                       {revisions.length} {revisions.length === 1 ? 'saved revision' : 'saved revisions'}
                     </p>
                   </div>
@@ -1754,7 +1768,7 @@ export function App() {
                   </div>
                 </div>
                 {revisions.length > 0 ? (
-                  <ol className="history-list">
+                  <ol className="history-list" aria-label="Saved revisions, newest first">
                     {revisions.map((revision, index) => {
                       const revisionDetail = `${describeRevisionSource(revision.source)} · ${formatArtifactTimestamp(revision.createdAt)}${index === 0 ? ' · Current document state' : ''}`;
 
@@ -1762,18 +1776,27 @@ export function App() {
                         <li
                           key={revision.id}
                           aria-current={index === 0 ? 'step' : undefined}
+                          aria-label={
+                            index === 0
+                              ? `${revision.summary}, current revision`
+                              : `${revision.summary}, ${index} back`
+                          }
                           className={`history-item${index === 0 ? ' history-item-highlighted' : ''}${highlightedRevisionId === revision.id ? ' history-item-flash' : ''}`}
                         >
                           <div className="history-item-main">
                             <p className="history-item-summary">{revision.summary}</p>
                             <p className="history-item-detail">{revisionDetail}</p>
                           </div>
-                          <div className="history-item-actions">
+                          <div
+                            className="history-item-actions"
+                            role="group"
+                            aria-label={index === 0 ? 'Current revision status' : `Revision actions for ${revision.summary}`}
+                          >
                             <span className="meta-pill meta-pill-muted history-item-source-badge">
                               {getRevisionSourceBadgeLabel(revision.source)}
                             </span>
                             {index === 0 ? (
-                              <span className="meta-pill meta-pill-success history-item-badge">Current</span>
+                              <span className="meta-pill meta-pill-success history-item-badge" aria-label="Current revision">Current</span>
                             ) : (
                               <>
                                 <span className="meta-pill meta-pill-muted history-item-distance-badge">{index} back</span>
