@@ -123,6 +123,7 @@ export function App() {
   const [recentArtifacts, setRecentArtifacts] = useState<RecentArtifact[]>([]);
   const [activeProposalSet, setActiveProposalSet] = useState<ProposalSetRecord | null>(null);
   const [proposalHistory, setProposalHistory] = useState<ProposalSetRecord[]>([]);
+  const [, setRevisions] = useState<RevisionRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [composerBody, setComposerBody] = useState('');
@@ -146,6 +147,7 @@ export function App() {
   const [editNotice, setEditNotice] = useState<string | null>(null);
   const [draftDocumentTitle, setDraftDocumentTitle] = useState('');
   const [creatingDocument, setCreatingDocument] = useState(false);
+  const [handoffNotice, setHandoffNotice] = useState<string | null>(null);
 
   function getComposerDraftStorageKey(path: string) {
     return `${COMPOSER_DRAFT_STORAGE_PREFIX}${path}`;
@@ -390,6 +392,20 @@ export function App() {
   }, [agentConnectionState]);
 
   useEffect(() => {
+    if (!handoffNotice) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setHandoffNotice(null);
+    }, 2400);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [handoffNotice]);
+
+  useEffect(() => {
     try {
       const storedDraft = window.localStorage.getItem(getComposerDraftStorageKey(artifactPath));
 
@@ -624,6 +640,7 @@ export function App() {
     setArtifact(nextArtifact);
     setActiveProposalSet(payload.proposalSet ?? null);
     setProposalHistory(payload.proposalHistory ?? []);
+    setRevisions(payload.revisions ?? []);
     setLastLoadedUpdatedAt(nextArtifact.updatedAt);
     setHasRemoteUpdate(false);
     setRemoteUpdatedAt(null);
@@ -631,6 +648,7 @@ export function App() {
     setPendingLocalComment(null);
     setEditBaseUpdatedAt(nextArtifact.updatedAt);
     setEditNotice(null);
+    setHandoffNotice(null);
     setDraftDocumentTitle('');
     setAttachedSectionId((current) => (current && nextArtifact.sections.some((section) => section.id === current) ? current : null));
     setArtifactPath(nextArtifact.relativePath);
@@ -687,6 +705,7 @@ export function App() {
         setArtifact(null);
         setActiveProposalSet(null);
         setProposalHistory([]);
+        setRevisions([]);
         setLastLoadedUpdatedAt(null);
         setHasRemoteUpdate(false);
         setRemoteUpdatedAt(null);
@@ -895,6 +914,7 @@ export function App() {
     setEditNotice(null);
     setActiveProposalSet(null);
     setProposalHistory([]);
+    setRevisions([]);
     setLastLoadedUpdatedAt(null);
     setHasRemoteUpdate(false);
     setRemoteUpdatedAt(null);
@@ -926,6 +946,7 @@ export function App() {
     setEditBody('');
     setEditBaseUpdatedAt(null);
     setEditNotice(null);
+    setRevisions([]);
     setError(null);
     const params = new URLSearchParams(window.location.search);
     params.delete('draft');
@@ -1534,7 +1555,7 @@ export function App() {
                 <div className="reader-actions" role="group" aria-label="Document actions">
                   {isDraftDocument && !editMode ? (
                     <button
-                      className="secondary-button compact-button reader-rail-button"
+                      className="quiet-inline-action reader-rail-button"
                       type="button"
                       disabled={interactionLocked}
                       onClick={handleCancelDraftDocument}
@@ -1545,7 +1566,7 @@ export function App() {
                   {editMode ? (
                     <>
                       <button
-                        className="secondary-button compact-button proposal-review-button reader-rail-button"
+                        className="quiet-inline-action reader-rail-button"
                         type="button"
                         disabled={savingEdit}
                         onClick={handleCancelEditMode}

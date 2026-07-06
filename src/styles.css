@@ -2060,12 +2060,12 @@ textarea.path-input {
   .reader-bar-row {
     align-items: center;
     flex-wrap: nowrap;
-    gap: 12px;
+    gap: 8px;
   }
 
   .reader-bar-leading {
     align-items: center;
-    gap: 12px;
+    gap: 8px;
     width: auto;
     flex: 1 1 auto;
     min-width: 0;
@@ -2076,23 +2076,27 @@ textarea.path-input {
     line-height: 1.2;
   }
 
-  .reader-subtitle {
-    font-size: 0.82rem;
-  }
-
   .reader-actions {
     width: auto;
     justify-content: flex-end;
-    margin-left: auto;
+    margin-left: 0;
+    flex: 0 0 auto;
     flex-shrink: 0;
   }
 
-  .reader-meta-row {
-    gap: 8px;
+  .reader-actions-cluster {
+    width: auto;
+    justify-content: flex-end;
+    flex-wrap: nowrap;
   }
 
-  .reader-actions-cluster {
-    justify-content: flex-end;
+  .reader-mode-switch {
+    flex: 0 0 auto;
+    min-width: 0;
+  }
+
+  .reader-mode-button {
+    min-width: 0;
   }
 
   .reader-rail-button {
