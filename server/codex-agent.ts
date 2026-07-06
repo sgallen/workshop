@@ -21,6 +21,12 @@ export type DocumentAgentTurnInput = {
   documentPath: string;
   markdown: string;
   prompt: string;
+  recentComments: Array<{
+    authorType: 'human' | 'agent';
+    body: string;
+    sectionId: string | null;
+    createdAt: string;
+  }>;
   focusedSection: {
     id: string;
     headingText: string;
@@ -125,7 +131,7 @@ function parseConnectedIdentity(stdout: string): string {
   return match?.[1]?.trim() ?? 'ChatGPT';
 }
 
-function buildDocumentTurnPrompt(input: DocumentAgentTurnInput): string {
+export function buildDocumentTurnPrompt(input: DocumentAgentTurnInput): string {
   const sectionSummaries = input.sections.map((section) => {
     return [
       `Section ID: ${section.id}`,
@@ -173,6 +179,20 @@ function buildDocumentTurnPrompt(input: DocumentAgentTurnInput): string {
       ].join('\n')
     : 'There is no active proposal set.';
 
+  const recentDiscussionBlock = input.recentComments.length > 0
+    ? [
+        'Discussion thread so far:',
+        ...input.recentComments.map((comment, index) => {
+          const speaker = comment.authorType === 'human' ? 'Human' : 'Agent';
+          return [
+            `${index + 1}. ${speaker} (${comment.createdAt})`,
+            `Section id: ${comment.sectionId ?? 'null'}`,
+            comment.body
+          ].join('\n');
+        })
+      ].join('\n\n')
+    : 'Discussion thread so far: none';
+
   return `
 You are helping a human refine a Markdown document inside Workshop.
 
@@ -196,12 +216,28 @@ Rules:
 - Avoid implementation wording like "I changed", "I updated", or "I tightened" when proposal is not null. Prefer phrasing like "I propose", "A tighter version would be", or "This proposal would".
 - If the user is focused on a section and asks for a rewrite there, prefer that section id.
 - Never invent section ids. Use one of the provided ids exactly.
+- Use the full discussion thread to preserve conversational continuity. Do not act as if this turn starts from scratch when prior turns already set a workflow or resolved a point.
+- If the human asks you to review the document, raise concerns, and ask questions one at a time, treat that as an explicit workflow instruction that remains in force until the human changes it.
+- In that one-question-at-a-time workflow, ask exactly one concrete unresolved question per turn.
+- In that one-question-at-a-time workflow, when the human asks what to discuss next, choose the single most important remaining unresolved concern yourself and ask only that question.
+- In that one-question-at-a-time workflow, do not answer "what next?" with a list of multiple open questions, a menu of options, or a summary of the remaining agenda unless the human explicitly asks for the whole list.
+- In that one-question-at-a-time workflow, prefer proposal = null while you are still surfacing or resolving concerns conversationally.
+- In that one-question-at-a-time workflow, do not spend turns proposing meta-edits that only restate, tighten, or reorganize open questions unless the human explicitly asks for that rewrite.
+- In that one-question-at-a-time workflow, do not say things like "the next discussion is probably..." or "we could discuss..." when you can instead ask the concrete next question directly.
+- In that one-question-at-a-time workflow, keep the focus on the product or document decision itself, not on managing the Open Questions section as a conversational artifact.
+- When the human's latest answer clearly resolves a document decision, you may return a proposal if it would record that resolution in the document.
+- If resolving a question means the question should no longer remain open, any proposal should both record the resolution in the relevant section and remove or update the now-resolved open question in the same proposal set when the document structure allows it.
+- If the human has just answered a question and then asks to continue, either propose the concrete document update implied by that answer or ask the next unresolved question. Do not insert an extra meta-discussion step in between.
+- If the human says a question is resolved only when the document is updated elsewhere, do not act as if conversational agreement alone closes the loop.
+- Avoid replying with a new question that merely asks permission to do the workflow the human already requested.
 
 Document path: ${input.documentPath}
 
 ${focusBlock}
 
 ${activeProposalBlock}
+
+${recentDiscussionBlock}
 
 User prompt:
 ${input.prompt}

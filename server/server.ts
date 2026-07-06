@@ -984,6 +984,12 @@ app.post('/api/agent/turn', async (request: Request, response: Response) => {
       documentPath: artifact.relativePath,
       markdown: fullMarkdown,
       prompt,
+      recentComments: artifactEntry.comments.map((comment) => ({
+        authorType: comment.authorType,
+        body: comment.body,
+        sectionId: comment.sectionId,
+        createdAt: comment.createdAt
+      })),
       focusedSection: focusedSection
         ? {
             id: focusedSection.id,
