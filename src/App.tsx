@@ -1746,7 +1746,7 @@ export function App() {
                   </div>
                   <div className="history-panel-copy-block">
                     <p className="history-panel-copy">
-                      History stays attached to the document. The newest saved state is always listed first.
+                      History stays attached to the document. The newest saved state is always listed first, and restore creates a new current revision instead of erasing the timeline.
                     </p>
                     {historyActionNotice ? (
                       <p className="history-panel-note">{historyActionNotice}</p>
@@ -1756,11 +1756,12 @@ export function App() {
                 {revisions.length > 0 ? (
                   <ol className="history-list">
                     {revisions.map((revision, index) => {
-                      const revisionDetail = `${describeRevisionSource(revision.source)} · ${formatArtifactTimestamp(revision.createdAt)}`;
+                      const revisionDetail = `${describeRevisionSource(revision.source)} · ${formatArtifactTimestamp(revision.createdAt)}${index === 0 ? ' · Current document state' : ''}`;
 
                       return (
                         <li
                           key={revision.id}
+                          aria-current={index === 0 ? 'step' : undefined}
                           className={`history-item${index === 0 ? ' history-item-highlighted' : ''}${highlightedRevisionId === revision.id ? ' history-item-flash' : ''}`}
                         >
                           <div className="history-item-main">
@@ -1780,12 +1781,13 @@ export function App() {
                                   className="secondary-button compact-button history-item-button"
                                   type="button"
                                   disabled={interactionLocked || hasPendingProposal || hasRemoteUpdate}
+                                  aria-label={`Restore ${revision.summary}, ${index} back`}
                                   title={
                                     hasPendingProposal
                                       ? 'Resolve the pending proposal before restoring document history.'
                                       : hasRemoteUpdate
                                         ? 'Reload the document before restoring history.'
-                                        : undefined
+                                        : `Restore ${index} back as a new current revision.`
                                   }
                                   onClick={() => void handleRestoreRevision(revision.id)}
                                 >
