@@ -2,11 +2,13 @@
 
 ## Purpose
 
-Define a product model for saving meaningful document waypoints, returning to earlier states safely, and exploring alternate directions without losing trust in the current draft.
+Define a familiar, low-complexity product model for saving meaningful document waypoints, bringing a past state forward safely, and preserving trust in the current draft without forcing users to think in version-control terms.
+
+The goal is to keep the core loop easy to understand and practical to build now, while leaving room for more sophistication in later iterations if we need it.
 
 ## One-Line Product Goal
 
-Let a user preserve important document states, return to them later, and branch into alternate directions without fear of losing work.
+Let a user preserve important document states, return to them later, and promote a past state into the current line of work without fear of losing work.
 
 ## Why This Matters
 
@@ -16,39 +18,42 @@ In real writing and thinking work, people often want to:
 
 - get back to a previous version
 - preserve a promising state before a risky change
-- try two different directions
+- try a different direction without losing the current one
 - compare "keep it tight" versus "go broader"
 - avoid the anxiety that experimentation might destroy a good draft
 
-Without checkpoints or branching, Workshop risks feeling fragile exactly when the creative work gets interesting.
+Without checkpoints and a clear way to promote a past state, Workshop risks feeling fragile exactly when the creative work gets interesting.
 
 ## Product Position
 
 Revisions are the low-level safety layer.
 
-Checkpoints and branches are the higher-level human-facing shape built on top of that layer.
+Checkpoints are the higher-level human-facing waypoints built on top of that layer.
 
 The product should distinguish:
 
 - automatic history
 - intentional saved waypoints
-- alternate continuations
+- promotion of a past state
+- optional alternate continuations, described in product language rather than branch jargon
 
-This is not version control for engineers.
+This should feel familiar, not complicated.
 
-It is confidence and optionality for document work.
+It is not version control for engineers.
+
+It is confidence and optionality for document work, with room to add complexity later if the product needs it.
 
 ## v1 Goal
 
-Prove one clear loop:
+Prove one clear, familiar loop:
 
 1. user creates a checkpoint before or after an important change
 2. user can later jump back to inspect that state
-3. if user promotes that earlier state, Workshop records it as a new checkpointed state
+3. if user promotes that earlier state, Workshop makes it current and records a new checkpoint for that promotion
 4. the immediately preceding state remains in history because it was already checkpointed
-5. Workshop preserves the relationship between the current line of work and the alternate or restored line
+5. Workshop preserves the relationship between the current line of work and the promoted state
 
-If that loop feels understandable, Workshop can support deeper exploration without chaos.
+If that loop feels understandable and easy to implement, Workshop can support deeper exploration later without making v1 more complicated than it needs to be.
 
 ## v1 Non-Goals
 
@@ -79,13 +84,14 @@ Workshop should support that without making the product feel technical or intimi
 
 ## Core Product Requirements
 
-### 1. Intentional Checkpoints
+### 1. Intentional and Automatic Checkpoints
 
-Workshop must let the user create meaningful waypoints that feel like entries in a revision history.
+Workshop must let the user create meaningful waypoints that feel like entries in a revision history, and it must automatically create checkpoints for milestone saves so important document states are preserved without relying only on manual actions.
 
 Requirements:
 
 - a checkpoint can be created explicitly by the user
+- Workshop must create automatic checkpoints for milestone saves according to a defined policy
 - each checkpoint is stamped with the date and time it was created
 - the checkpoint is attached to a concrete document state
 - checkpoint creation should be fast enough that users actually use it
@@ -103,16 +109,17 @@ Requirements:
 - the pre-promotion current state should remain visible in history so nothing feels silently lost
 - the product should avoid ambiguous "did I lose my later work?" moments
 
-### 3. Alternate Direction Support
+### 3. Bringing a Past Checkpoint Forward
 
-Workshop must support branching from an earlier state.
+Workshop must support bringing an earlier checkpoint forward as the current document version.
 
 Requirements:
 
-- the user can intentionally start a new branch from a prior checkpoint
-- the user can also promote a prior checkpoint into the current line of work
-- promotion should create a fresh checkpoint for the new current state, while keeping the source checkpoint and prior current state visible
-- the product should make it clear which branch or promoted line is current
+- the user can choose an earlier checkpoint and bring it forward into the current line of work
+- bringing it forward should create a fresh checkpoint for the new current version
+- the source checkpoint and the version it replaced should remain visible in history
+- the product should describe this as bringing a version forward or restoring a past checkpoint, not as branch management
+- if the product later supports explicit alternate continuations, that language should stay secondary to the bring-forward model
 
 ### 4. Human-Understandable History
 
@@ -165,16 +172,18 @@ Success criteria:
 - later work is not perceived as silently deleted
 - a promoted checkpoint becomes a new checkpoint without losing the state that was just replaced
 
-### Flow 3: Branch From a Checkpoint
+### Flow 3: Restore a Checkpoint
 
 1. user selects a checkpoint
-2. user chooses `Try another direction`
-3. Workshop creates a new branch from that state
-4. the user continues editing or collaborating on the new branch
+2. user chooses `Restore this checkpoint`
+3. Workshop makes that checkpoint current
+4. Workshop records the restore as a new checkpoint
+5. the immediately prior state remains visible in history
 
 Success criteria:
 
-- alternate directions feel real, not like overwritten experiments
+- the user feels like they are restoring a checkpoint, not operating a source-control tool
+- earlier work is still visible and trustworthy
 
 ## UX Requirements
 
@@ -182,17 +191,37 @@ This flow should feel empowering, not technical.
 
 Required visible elements:
 
-- explicit checkpoint action
+- explicit checkpoint action inside the Checkpoints pane
 - history/checkpoint list
 - clear current-state indicator
 - restore action
 - branch/create alternate direction action
+
+Mobile document header requirements:
+
+- the document header stays compact and legible on phone, even if it needs to wrap onto a second line
+- the hamburger menu remains the entry point to recent documents and the document list
+- the toolbar does not carry document identity
+- the filename is moved out of the top toolbar so the reader surface owns the document title
+- the toolbar makes room for a checkpoint/history icon button and an Edit / Discuss segmented control
+- use Font Awesome `faClockRotateLeft` for the checkpoint/history icon
+- tapping the checkpoint/history icon opens a right-side Checkpoints pane
+- the Checkpoints pane is a sibling to the Discuss pane
+- the Checkpoints pane contains the timeline and the Create checkpoint action
+- Create checkpoint lives in the Checkpoints pane, not directly in the main toolbar
+
+Document surface requirements:
+
+- the filename appears as quiet metadata above the document H1 inside the document surface
+- the filename should be small, muted, single-line, and truncate with ellipsis if long
+- the filename should feel like an annotation to the document, not toolbar chrome
 
 Nice to avoid in v1:
 
 - complex branch graphs
 - engineering-centric terminology everywhere
 - too many irreversible-feeling choices
+- generic document-menu patterns that replace the familiar drawer-based navigation entry point
 
 The experience should feel like:
 
@@ -201,6 +230,7 @@ The experience should feel like:
 not:
 
 - operating a source-control dashboard
+- a traditional document editor that makes file identity compete with the reading surface
 
 ## Technical Requirements
 
@@ -226,10 +256,9 @@ This feature should build on the existing revision layer rather than inventing a
 
 ## Open Questions
 
-- Should v1 expose `branch` explicitly, or use gentler language like `Try another direction`?
-- Should checkpoints be manual only at first, or also allow a few automatic milestone checkpoints?
-- How much preview is needed before restore feels safe?
-- Should branch switching feel document-like or tab-like?
+- How should the system limit automatic checkpoints so history stays useful and storage does not fill up?
+- How much preview is needed before promotion feels safe?
+- Should any later alternate-direction UI feel document-like or tab-like?
 
 ## Product Test
 
@@ -240,5 +269,11 @@ This PRD is satisfied when all of the following are true:
 - restore preserves history
 - promoting a prior checkpoint creates a new checkpointed current state
 - the state immediately before that promotion remains available in history
-- the user can start an alternate direction from an older state
-- the current branch or line of work remains understandable
+- the user can bring an older state forward without needing to think in git terms
+- the current line of work remains understandable
+- the document header remains compact and legible on mobile without forcing document identity and controls into one cramped row
+- the hamburger menu still opens the document / recents drawer
+- the filename no longer takes space in the top toolbar
+- a checkpoint/history icon fits in the toolbar without requiring an overflow menu
+- the filename appears quietly above the document title inside the document surface
+- the app still feels like an agent-first document workspace, not a traditional document editor
