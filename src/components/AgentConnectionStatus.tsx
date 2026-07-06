@@ -64,6 +64,9 @@ export function AgentConnectionStatus({
   const showManagePanel = connectionState === 'connected' && manageOpen;
   const showConnectFlow = connectionState === 'connecting';
   const showIssuePanel = connectionState === 'error' && Boolean(message);
+  const primaryActionClassName = connectionState === 'connected'
+    ? 'quiet-inline-action agent-connection-action'
+    : 'secondary-button compact-button agent-connection-action';
 
   return (
     <div
@@ -94,7 +97,7 @@ export function AgentConnectionStatus({
 
         {primaryActionLabel ? (
           <button
-            className="secondary-button compact-button agent-connection-action"
+            className={primaryActionClassName}
             type="button"
             onClick={() => {
               if (connectionState === 'connected') {
@@ -119,7 +122,7 @@ export function AgentConnectionStatus({
           </p>
           <div className="agent-connection-panel-actions">
             <button
-              className="text-button text-button-muted agent-connection-inline-action"
+              className="secondary-button compact-button agent-connection-inline-action"
               type="button"
               onClick={onDisconnect}
               disabled={actionDisabled}

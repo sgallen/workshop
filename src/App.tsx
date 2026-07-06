@@ -1815,7 +1815,7 @@ export function App() {
                                     <div className="comment-thread-header comment-thread-header-reviewonly">
                                       {isActiveProposalAnchor ? (
                                         <button
-                                          className="text-button text-button-muted comment-jump-link"
+                                          className="quiet-inline-action comment-jump-link"
                                           type="button"
                                           disabled={interactionLocked}
                                           onClick={handleOpenProposalInDocument}
@@ -1887,6 +1887,9 @@ export function App() {
                             ? 'A newer document version is available. Reload before accepting proposals.'
                             : 'A newer document version is available.'}
                         </span>
+                        {remoteUpdateLabel ? (
+                          <span className="context-subtle discussion-status-detail">{remoteUpdateLabel}</span>
+                        ) : null}
                         <button className="text-button" type="button" disabled={interactionLocked} onClick={() => void handleReloadDocument()}>
                           {loading ? 'Reloading…' : 'Reload'}
                         </button>
