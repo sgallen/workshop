@@ -1,7 +1,7 @@
 import { MouseEvent } from 'react';
 
 type ProposalThreadFooterProps = {
-  activeProposalTargetSummary: string | null;
+  activeProposalTargetCount: number;
   interactionLocked: boolean;
   hasStalePendingProposals: boolean;
   loading: boolean;
@@ -11,7 +11,7 @@ type ProposalThreadFooterProps = {
 };
 
 export function ProposalThreadFooter({
-  activeProposalTargetSummary,
+  activeProposalTargetCount,
   interactionLocked,
   hasStalePendingProposals,
   loading,
@@ -26,9 +26,6 @@ export function ProposalThreadFooter({
 
   return (
     <div className="proposal-thread-footer">
-      {activeProposalTargetSummary ? (
-        <p className="context-subtle">{activeProposalTargetSummary}</p>
-      ) : null}
       <div
         className="proposal-actions proposal-actions-inline proposal-actions-inline-document proposal-thread-actions"
         role="group"
@@ -40,16 +37,16 @@ export function ProposalThreadFooter({
           disabled={interactionLocked}
           onClick={(event) => stopAndRun(event, onReject)}
         >
-          Reject
+          {activeProposalTargetCount > 1 ? 'Reject all' : 'Reject'}
         </button>
         <button
-          className="primary-button compact-button action-primary-button proposal-review-button"
+          className="primary-button compact-button action-primary-button proposal-review-button proposal-review-button-primary"
           type="button"
           disabled={interactionLocked || hasStalePendingProposals}
           title={hasStalePendingProposals ? 'Reload the document before accepting these changes.' : undefined}
           onClick={(event) => stopAndRun(event, onAccept)}
         >
-          Accept
+          {activeProposalTargetCount > 1 ? 'Accept all' : 'Accept'}
         </button>
       </div>
       {hasStalePendingProposals ? (

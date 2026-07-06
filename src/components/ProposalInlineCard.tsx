@@ -70,7 +70,7 @@ export function ProposalInlineCard({
           Reject
         </button>
         <button
-          className="primary-button compact-button action-primary-button proposal-review-button"
+          className="primary-button compact-button action-primary-button proposal-review-button proposal-review-button-primary"
           type="button"
           disabled={interactionLocked || hasStalePendingProposals}
           title={hasStalePendingProposals ? 'Reload the document before accepting this proposal.' : undefined}

@@ -15,9 +15,10 @@ const sharedTokens = {
     xxl: '32px'
   },
   radius: {
+    xs: '4px',
     sm: '8px',
-    md: '10px',
-    lg: '14px',
+    md: '12px',
+    lg: '16px',
     xl: '16px',
     pill: '999px'
   },
@@ -49,20 +50,20 @@ const lightTheme = {
     frosted: {
       base: 'rgba(255, 255, 255, 0.82)',
       border: 'rgba(221, 228, 238, 0.98)',
-      shadow: '0 10px 28px rgba(16, 24, 40, 0.08)'
+      shadow: '0 6px 18px rgba(16, 24, 40, 0.06)'
     },
     emphasis: {
       base: 'linear-gradient(180deg, rgba(255, 251, 246, 0.98) 0%, rgba(252, 248, 242, 0.98) 100%)',
       stale: 'linear-gradient(180deg, rgba(255, 247, 244, 0.98) 0%, rgba(254, 243, 238, 0.98) 100%)',
       border: 'rgba(214, 199, 182, 0.96)',
       borderStrong: 'rgba(214, 199, 182, 0.75)',
-      shadow: '0 10px 24px rgba(62, 90, 138, 0.06)'
+      shadow: '0 4px 12px rgba(62, 90, 138, 0.045)'
     },
     panel: {
       base: 'linear-gradient(180deg, rgba(255, 255, 255, 0.98) 0%, rgba(249, 247, 243, 0.98) 100%)',
       glow: 'rgba(62, 90, 138, 0.1)',
-      shadow: '22px 0 48px rgba(16, 24, 40, 0.12)',
-      shadowMobile: '-22px 0 48px rgba(16, 24, 40, 0.12)'
+      shadow: '14px 0 32px rgba(16, 24, 40, 0.08)',
+      shadowMobile: '-14px 0 32px rgba(16, 24, 40, 0.08)'
     },
     selected: 'rgba(232, 239, 249, 0.92)',
     success: 'rgba(235, 248, 239, 0.98)',
@@ -101,20 +102,20 @@ const lightTheme = {
     primary: {
       background: 'linear-gradient(180deg, #4a6ba0 0%, #2e4467 100%)',
       backgroundDisabled: 'linear-gradient(180deg, rgba(104, 131, 173, 0.9) 0%, rgba(60, 85, 122, 0.92) 100%)',
-      shadow: '0 10px 24px rgba(62, 90, 138, 0.22)',
-      shadowDisabled: '0 8px 18px rgba(62, 90, 138, 0.18)'
+      shadow: '0 4px 12px rgba(62, 90, 138, 0.16)',
+      shadowDisabled: '0 3px 10px rgba(62, 90, 138, 0.12)'
     },
     secondary: {
       background: 'rgba(255, 255, 255, 0.96)',
-      shadow: '0 2px 6px rgba(16, 24, 40, 0.04)'
+      shadow: '0 1px 3px rgba(16, 24, 40, 0.03)'
     }
   },
   focus: {
     ring: '0 0 0 4px rgba(62, 90, 138, 0.14)'
   },
   shadow: {
-    base: '0 18px 48px rgba(16, 24, 40, 0.08)',
-    soft: '0 8px 24px rgba(16, 24, 40, 0.06)'
+    base: '0 12px 32px rgba(16, 24, 40, 0.06)',
+    soft: '0 3px 12px rgba(16, 24, 40, 0.045)'
   }
 } as const;
 
@@ -138,20 +139,20 @@ const darkTheme = {
     frosted: {
       base: 'rgba(20, 26, 35, 0.84)',
       border: 'rgba(88, 104, 130, 0.78)',
-      shadow: '0 12px 32px rgba(0, 0, 0, 0.34)'
+      shadow: '0 8px 22px rgba(0, 0, 0, 0.28)'
     },
     emphasis: {
       base: 'linear-gradient(180deg, rgba(40, 49, 61, 0.98) 0%, rgba(29, 36, 47, 0.98) 100%)',
       stale: 'linear-gradient(180deg, rgba(62, 37, 34, 0.98) 0%, rgba(48, 31, 29, 0.98) 100%)',
       border: 'rgba(118, 104, 87, 0.72)',
       borderStrong: 'rgba(118, 104, 87, 0.52)',
-      shadow: '0 10px 24px rgba(0, 0, 0, 0.22)'
+      shadow: '0 4px 12px rgba(0, 0, 0, 0.18)'
     },
     panel: {
       base: 'linear-gradient(180deg, rgba(28, 36, 48, 0.98) 0%, rgba(20, 27, 37, 0.98) 100%)',
       glow: 'rgba(112, 146, 205, 0.16)',
-      shadow: '22px 0 48px rgba(0, 0, 0, 0.34)',
-      shadowMobile: '-22px 0 48px rgba(0, 0, 0, 0.34)'
+      shadow: '14px 0 32px rgba(0, 0, 0, 0.26)',
+      shadowMobile: '-14px 0 32px rgba(0, 0, 0, 0.26)'
     },
     selected: 'rgba(54, 71, 97, 0.96)',
     success: 'rgba(24, 52, 41, 0.96)',
@@ -190,20 +191,20 @@ const darkTheme = {
     primary: {
       background: 'linear-gradient(180deg, #88a7d7 0%, #5a76a2 100%)',
       backgroundDisabled: 'linear-gradient(180deg, rgba(104, 131, 173, 0.72) 0%, rgba(60, 85, 122, 0.8) 100%)',
-      shadow: '0 10px 24px rgba(0, 0, 0, 0.28)',
-      shadowDisabled: '0 8px 18px rgba(0, 0, 0, 0.2)'
+      shadow: '0 4px 12px rgba(0, 0, 0, 0.22)',
+      shadowDisabled: '0 3px 10px rgba(0, 0, 0, 0.16)'
     },
     secondary: {
       background: 'rgba(27, 35, 46, 0.96)',
-      shadow: '0 2px 6px rgba(0, 0, 0, 0.18)'
+      shadow: '0 1px 3px rgba(0, 0, 0, 0.14)'
     }
   },
   focus: {
     ring: '0 0 0 4px rgba(112, 146, 205, 0.24)'
   },
   shadow: {
-    base: '0 18px 48px rgba(0, 0, 0, 0.26)',
-    soft: '0 8px 24px rgba(0, 0, 0, 0.2)'
+    base: '0 12px 32px rgba(0, 0, 0, 0.22)',
+    soft: '0 3px 12px rgba(0, 0, 0, 0.16)'
   }
 } as const;
 

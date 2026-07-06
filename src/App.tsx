@@ -4,14 +4,13 @@ import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPenToSquare } from '@fortawesome/free-regular-svg-icons';
 import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
 import type { Artifact, Comment, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
-import { formatRecentActivity } from './lib/formatting';
+import { formatArtifactTimestamp, formatRecentActivity } from './lib/formatting';
 import { readJsonResponse } from './lib/read-json-response';
 import { AgentConnectionStatus, type AgentConnectionState } from './components/AgentConnectionStatus';
 import { ProposalInlineCard } from './components/ProposalInlineCard';
 import { ProposalThreadFooter } from './components/ProposalThreadFooter';
 import { ReaderStatusBanner } from './components/ReaderStatusBanner';
 import {
-  renderRailAgentHint,
   summarizeAgentStatus,
   type AgentAuthStatus
 } from './web/agent-auth';
@@ -54,6 +53,24 @@ function createDraftArtifact(): Artifact {
     comments: [],
     sections: []
   };
+}
+
+function getShortSentence(text: string | null | undefined): string | null {
+  const normalized = text?.trim();
+
+  if (!normalized) {
+    return null;
+  }
+
+  const firstSentenceMatch = normalized.match(/^(.+?[.!?])(?:\s|$)/);
+  const firstSentence = firstSentenceMatch ? firstSentenceMatch[1].trim() : normalized;
+
+  if (firstSentence.length <= 160) {
+    return firstSentence;
+  }
+
+  const sliced = firstSentence.slice(0, 157).trimEnd();
+  return `${sliced}...`;
 }
 
 type ArtifactPayload = {
@@ -116,6 +133,7 @@ export function App() {
   const [attachedSectionId, setAttachedSectionId] = useState<string | null>(null);
   const [proposalCompareModeById, setProposalCompareModeById] = useState<Record<string, 'original' | 'proposed'>>({});
   const [hasRemoteUpdate, setHasRemoteUpdate] = useState(false);
+  const [remoteUpdatedAt, setRemoteUpdatedAt] = useState<string | null>(null);
   const [lastLoadedUpdatedAt, setLastLoadedUpdatedAt] = useState<string | null>(null);
   const [agentAuth, setAgentAuth] = useState<AgentAuthStatus | null>(null);
   const [agentAuthLoading, setAgentAuthLoading] = useState(true);
@@ -264,6 +282,9 @@ export function App() {
       ? `Reviewing ${attachedSection.headingText}…`
       : 'Reviewing the document…';
   const hasStalePendingProposals = hasRemoteUpdate && pendingProposalItems.length > 0;
+  const remoteUpdateLabel = hasRemoteUpdate && remoteUpdatedAt
+    ? `Newer version saved ${formatArtifactTimestamp(remoteUpdatedAt)}`
+    : null;
   const reviewStateLabel = activeProposalSet
     ? `${pendingProposalCount} ${pendingProposalCount === 1 ? 'change' : 'changes'}`
     : null;
@@ -291,20 +312,12 @@ export function App() {
 
     return ids;
   }, [activeProposalSet, pendingProposalItems]);
-  const activeProposalTargetSections = useMemo(() => {
-    return activeProposalTargetSectionIds
-      .map((sectionId) => sectionById.get(sectionId) ?? null)
-      .filter((section): section is NonNullable<typeof section> => section !== null);
-  }, [activeProposalTargetSectionIds, sectionById]);
   const activeProposalPrimarySectionId =
     activeProposalTargetSectionIds[0] ?? activeProposalSet?.focusedSectionId ?? pendingProposalItems[0]?.sectionId ?? null;
-  const activeProposalSpansMultipleSections = activeProposalTargetSections.length > 1;
-  const activeProposalContextLabel = activeProposalSpansMultipleSections
-    ? `${activeProposalTargetSections.length} sections`
-    : activeProposalTargetSections[0]?.headingText ?? null;
-  const activeProposalTargetSummary = activeProposalSpansMultipleSections
-    ? activeProposalTargetSections.map((section) => section.headingText).join(', ')
-    : null;
+  const activeProposalSpansMultipleSections = activeProposalTargetSectionIds.length > 1;
+  const activeProposalThreadSummary = getShortSentence(activeProposalSet?.summary)
+    ?? getShortSentence(activeProposalSet?.rationale)
+    ?? null;
   const activeProposalReviewIndex = useMemo(() => {
     if (!attachedSectionId) {
       return -1;
@@ -338,7 +351,16 @@ export function App() {
       : agentAuth?.state === 'expired' || agentAuth?.state === 'error'
         ? 'error'
         : 'disconnected';
-
+  const discussionAgentLabel = 'Codex';
+  const discussionAgentStatus = agentAuthLoading
+    ? 'Checking connection'
+    : agentAuth?.state === 'connected'
+      ? null
+      : agentAuth?.state === 'connecting'
+        ? 'Connecting'
+        : agentAuth?.state === 'expired' || agentAuth?.state === 'error'
+          ? 'Connection issue'
+          : 'Not connected';
   useEffect(() => {
     if (artifactPath === DRAFT_ARTIFACT_PATH) {
       setLoading(false);
@@ -604,6 +626,7 @@ export function App() {
     setProposalHistory(payload.proposalHistory ?? []);
     setLastLoadedUpdatedAt(nextArtifact.updatedAt);
     setHasRemoteUpdate(false);
+    setRemoteUpdatedAt(null);
     setDraftPath(nextArtifact.relativePath);
     setPendingLocalComment(null);
     setEditBaseUpdatedAt(nextArtifact.updatedAt);
@@ -666,6 +689,7 @@ export function App() {
         setProposalHistory([]);
         setLastLoadedUpdatedAt(null);
         setHasRemoteUpdate(false);
+        setRemoteUpdatedAt(null);
         setAttachedSectionId(null);
       }
       setError(caughtError instanceof Error ? caughtError.message : 'Failed to load document.');
@@ -714,9 +738,12 @@ export function App() {
         throw new Error(payload.error ?? 'Failed to inspect document.');
       }
 
-      setHasRemoteUpdate(payload.updatedAt !== lastLoadedUpdatedAt);
+      const changed = payload.updatedAt !== lastLoadedUpdatedAt;
+      setHasRemoteUpdate(changed);
+      setRemoteUpdatedAt(changed ? payload.updatedAt : null);
     } catch {
       setHasRemoteUpdate(false);
+      setRemoteUpdatedAt(null);
     }
   }
 
@@ -759,6 +786,7 @@ export function App() {
     setProposalHistory([]);
     setLastLoadedUpdatedAt(null);
     setHasRemoteUpdate(false);
+    setRemoteUpdatedAt(null);
     setPendingLocalComment(null);
     setDraftDocumentTitle('');
     setAttachedSectionId(null);
@@ -869,6 +897,7 @@ export function App() {
     setProposalHistory([]);
     setLastLoadedUpdatedAt(null);
     setHasRemoteUpdate(false);
+    setRemoteUpdatedAt(null);
     setPendingLocalComment(null);
     setAttachedSectionId(null);
     setComposerBody('');
@@ -1380,6 +1409,7 @@ export function App() {
                       type="button"
                       disabled={interactionLocked}
                       onClick={() => handleOpenArtifact(recent.relativePath)}
+                      aria-label={`Open ${recent.title}, ${recent.relativePath}`}
                       aria-current={recent.relativePath === resolvedArtifactPath ? 'page' : undefined}
                     >
                       <span className="recent-item-topline">
@@ -1533,28 +1563,35 @@ export function App() {
                       </button>
                     </>
                   ) : !isDraftDocument ? (
-                    <button
-                      className="secondary-button compact-button reader-rail-button"
-                      type="button"
-                      disabled={interactionLocked || hasPendingProposal}
-                      title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
-                      onClick={handleEnterEditMode}
-                    >
-                      Edit
-                    </button>
-                  ) : null}
-                  {!editMode && !isDraftDocument ? (
-                    <button
-                      className="secondary-button compact-button reader-rail-button"
-                      type="button"
-                      disabled={interactionLocked}
-                      onClick={() => {
-                        setMenuOpen(false);
-                        setRailOpen(true);
-                      }}
-                    >
-                      Discuss
-                    </button>
+                    <div className="reader-actions-cluster">
+                      <div className="reader-mode-switch" role="group" aria-label="Document mode">
+                        <button
+                          className={`secondary-button compact-button reader-rail-button reader-mode-button${!railOpen ? ' reader-mode-button-active' : ''}`}
+                          type="button"
+                          disabled={interactionLocked || hasPendingProposal}
+                          title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
+                          aria-pressed={!railOpen}
+                          onClick={() => {
+                            setRailOpen(false);
+                            handleEnterEditMode();
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className={`secondary-button compact-button reader-rail-button reader-mode-button${railOpen ? ' reader-mode-button-active' : ''}`}
+                          type="button"
+                          disabled={interactionLocked}
+                          aria-pressed={railOpen}
+                          onClick={() => {
+                            setMenuOpen(false);
+                            setRailOpen(true);
+                          }}
+                        >
+                          Discuss
+                        </button>
+                      </div>
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -1572,6 +1609,7 @@ export function App() {
                   hasUnsavedEditChanges={hasUnsavedEditChanges}
                   editNotice={editNotice}
                   hasRemoteUpdate={hasRemoteUpdate}
+                  remoteUpdateLabel={remoteUpdateLabel}
                   hasStalePendingProposals={hasStalePendingProposals}
                   onCycleProposal={handleCycleProposalInDocument}
                   onReloadDocument={handleReloadDocument}
@@ -1628,6 +1666,7 @@ export function App() {
                           type="text"
                           value={draftDocumentTitle}
                           disabled={interactionLocked}
+                          aria-label="Document title"
                           onChange={(event) => setDraftDocumentTitle(event.target.value)}
                           onKeyDown={(event) => {
                             if (event.key === 'Enter' && !event.shiftKey) {
@@ -1640,6 +1679,8 @@ export function App() {
                         />
                         <div
                           className="document-empty-actions document-empty-actions-split"
+                          role="group"
+                          aria-label="Draft document actions"
                           data-ready={draftDocumentTitle.trim() ? 'true' : 'false'}
                         >
                           <button
@@ -1716,11 +1757,16 @@ export function App() {
                 <div className="discussion-rail-panel" role="region" aria-label="Discussion panel">
                   <div className="discussion-rail-header">
                     <div className="discussion-rail-header-main">
-                      <span
-                        className={`discussion-rail-status${agentAuth?.state === 'connected' ? ' discussion-rail-status-connected' : ' discussion-rail-status-disconnected'}`}
-                      >
-                        {renderRailAgentHint(agentAuth, agentAuthLoading)}
-                      </span>
+                      <div className="discussion-rail-agent" role="status" aria-live="polite">
+                        <p className="discussion-rail-agent-name">
+                          <span
+                            className={`discussion-rail-agent-dot${agentAuth?.state === 'connected' ? ' discussion-rail-agent-dot-connected' : agentAuth?.state === 'connecting' ? ' discussion-rail-agent-dot-connecting' : ' discussion-rail-agent-dot-disconnected'}`}
+                            aria-hidden="true"
+                          />
+                          <span>{discussionAgentLabel}</span>
+                        </p>
+                        {discussionAgentStatus ? <p className="discussion-rail-agent-status">{discussionAgentStatus}</p> : null}
+                      </div>
                     </div>
                     <button
                       className="workspace-menu-close"
@@ -1746,9 +1792,9 @@ export function App() {
                           const isActiveProposalAnchor = activeProposalAnchorCommentId === comment.id;
                           const anchoredProposalTimeline = proposalTimelineByAnchorCommentId.get(comment.id) ?? [];
                           const proposalContextLabel = isActiveProposalAnchor
-                            ? activeProposalContextLabel
+                            ? null
                             : commentSection?.headingText ?? null;
-                          const jumpLabel = activeProposalSpansMultipleSections ? 'Jump to changes' : 'Jump to change';
+                          const jumpLabel = activeProposalSpansMultipleSections ? 'Review' : 'View change';
 
                           return (
                             <div key={comment.id}>
@@ -1758,9 +1804,15 @@ export function App() {
                                   data-author={comment.authorType}
                                   data-active-proposal={isActiveProposalAnchor ? 'true' : 'false'}
                                 >
-                                  {proposalContextLabel || isActiveProposalAnchor ? (
+                                  {proposalContextLabel ? (
                                     <div className="comment-thread-header" role="group" aria-label="Comment context">
-                                      {proposalContextLabel ? <p className="comment-context comment-context-tight">{proposalContextLabel}</p> : <span />}
+                                      <div className="comment-context-group">
+                                        <p className="comment-context comment-context-tight">{proposalContextLabel}</p>
+                                      </div>
+                                    </div>
+                                  ) : null}
+                                  {isActiveProposalAnchor ? (
+                                    <div className="comment-thread-header comment-thread-header-reviewonly">
                                       {isActiveProposalAnchor ? (
                                         <button
                                           className="text-button text-button-muted comment-jump-link"
@@ -1773,10 +1825,10 @@ export function App() {
                                       ) : null}
                                     </div>
                                   ) : null}
-                                  <p>{comment.body}</p>
+                                  <p>{isActiveProposalAnchor ? (activeProposalThreadSummary ?? comment.body) : comment.body}</p>
                                   {isActiveProposalAnchor && activeProposalSet ? (
                                     <ProposalThreadFooter
-                                      activeProposalTargetSummary={activeProposalTargetSummary}
+                                      activeProposalTargetCount={activeProposalTargetSectionIds.length}
                                       interactionLocked={interactionLocked}
                                       hasStalePendingProposals={hasStalePendingProposals}
                                       loading={loading}

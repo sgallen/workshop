@@ -11,6 +11,7 @@ type ReaderStatusBannerProps = {
   hasUnsavedEditChanges: boolean;
   editNotice: string | null;
   hasRemoteUpdate: boolean;
+  remoteUpdateLabel: string | null;
   hasStalePendingProposals: boolean;
   onCycleProposal: () => void;
   onReloadDocument: () => void | Promise<void>;
@@ -29,6 +30,7 @@ export function ReaderStatusBanner({
   hasUnsavedEditChanges,
   editNotice,
   hasRemoteUpdate,
+  remoteUpdateLabel,
   hasStalePendingProposals,
   onCycleProposal,
   onReloadDocument
@@ -97,6 +99,9 @@ export function ReaderStatusBanner({
           <span className={`meta-pill${hasStalePendingProposals ? ' meta-pill-warning' : ' meta-pill-info'}`}>
             {editMode ? 'Reload required before save' : hasStalePendingProposals ? 'Reload required before apply' : 'Changed on disk'}
           </span>
+          {remoteUpdateLabel ? (
+            <span className="meta-pill meta-pill-muted">{remoteUpdateLabel}</span>
+          ) : null}
         </div>
       ) : null}
       {hasRemoteUpdate ? (
