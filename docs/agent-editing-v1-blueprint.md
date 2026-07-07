@@ -810,6 +810,13 @@ Recommended contract:
    - current active proposal set and revision cues if they exist
    - latest revision summary/count visible without leaving the document
 
+Recommended first endpoint:
+
+- `POST /api/artifact/open`
+  - body:
+    - `path`
+  - returns the document-open result below
+
 Recommended first response shape:
 
 ```json
@@ -1106,11 +1113,12 @@ Current implementation note:
 - the first-pass UI now exposes `View history` from the `reader-bar`
 - the latest revision summary in the same cluster can reopen that history panel directly
 - newly created latest revisions are briefly highlighted after save or accept
+- named checkpoints can now be created directly from the history panel without leaving the document view
 - `Undo last` now exists as a document-level action when there is an earlier stored revision to return to
-- `Restore` now exists directly from non-latest revision items in the history panel
-- the history panel now explains when undo or restore are unavailable because of stale file state, pending proposals, or insufficient saved history
-- the history panel now shows an explicit saved revision count and marks the current entry as the current document state
-- current and non-current revision rows now carry clearer accessibility labels for revision order, current-state status, and restore actions
+- `Restore` now exists directly from non-current history items in the history panel, whether they are manual checkpoints or automatic restore/save entries
+- the history panel now explains when checkpoint save, undo, or restore are unavailable because of stale file state, pending proposals, or insufficient saved history
+- the history panel now shows an explicit saved history count, distinguishes manual versus automatic entries, and marks the current entry as the current document state
+- current and non-current history rows now carry clearer accessibility labels for order, current-state status, and restore actions
 - on phone-sized layouts, the `reader-bar` can wrap onto a second line so long document titles and controls do not collide in one forced row
 - the first-pass history rows can also stack their summaries, badges, and restore actions so revision controls stay legible on phones
 
@@ -1680,11 +1688,11 @@ Recommended test split:
 
 This is enough to keep the first proposal/revision implementation honest without turning the initial slice into a testing detour.
 
-### Suggested First Revision List Contract
+### Suggested First History List Contract
 
-The first revision list should stay lightweight and navigation-oriented.
+The first history list should stay lightweight and navigation-oriented.
 
-Recommended revision list item shape:
+Recommended automatic revision item shape:
 
 ```json
 {
@@ -1696,17 +1704,32 @@ Recommended revision list item shape:
 }
 ```
 
+Recommended checkpoint item shape:
+
+```json
+{
+  "id": "chk_123",
+  "revisionId": "rev_123",
+  "createdAt": "2026-07-03T21:05:00Z",
+  "label": "Before restructuring",
+  "summary": "Before restructuring",
+  "source": "manual",
+  "sourceCheckpointId": null
+}
+```
+
 Practical rules:
 
 - do not return full revision markdown in the lightweight list endpoint
-- keep list items sufficient for labels, ordering, and restore actions
+- keep history items sufficient for labels, ordering, badges, and restore actions
 - fetch or include full snapshot content only when a restore or detailed preview path actually needs it
 
 First-pass UI use:
 
-- render the latest few revisions in newest-first order
-- highlight the newest revision after accept or restore
-- expose restore from the revision item, not from a separate complex history shell
+- render the latest few history items in newest-first order
+- highlight the newest current state after accept or restore
+- expose restore from the history item, not from a separate complex history shell
+- let manual checkpoints stand out from automatic save/restore entries without forcing a different workflow
 
 This keeps revision history understandable without turning v1 into a full diff browser.
 
@@ -1716,11 +1739,12 @@ The first restore interaction should be explicit and conservative.
 
 Recommended behavior:
 
-1. user chooses `Restore` from a revision item
-2. server restores that snapshot as the new canonical document state
-3. server records a new latest revision with source `restore_revision`
-4. client refreshes the canonical document payload, revision list, and any active proposal state
-5. the restored revision result becomes the newest highlighted revision in UI
+1. user chooses `Restore` from a history item
+2. if that item is a checkpoint, the server resolves it to its referenced revision snapshot
+3. server restores that snapshot as the new canonical document state
+4. server records a new latest revision with source `restore_revision`
+5. client refreshes the canonical document payload, history list, and any active proposal state
+6. the restored result becomes the newest highlighted current entry in UI
 
 Practical rules:
 

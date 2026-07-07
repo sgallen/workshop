@@ -76,8 +76,9 @@ The first version should stay narrow and prove the core loop well:
 In the current v0 loop, that handoff should be explicit and lightweight:
 
 - the shareable object is a stable document URL, not a raw machine path
-- the document view keeps repo-relative identity visible in the `reader-bar`
-- the document view shows lightweight revision cues without leaving the document, including a compact `View history` panel, a latest-revision summary that can reopen it directly, and explicit `Undo last` / per-revision `Restore` actions
+- the current hosted-local handoff seam is `POST /api/artifact/open`, which resolves a real document path and returns `documentUrl`, `resolvedPath`, `title`, and `resumed`
+- the document view keeps repo-relative identity visible in the `reader-bar`, alongside a lightweight `Copy link` action for the stable document URL
+- the document view shows lightweight history cues without leaving the document, including a compact `View history` panel, named checkpoints, a latest-revision summary that can reopen it directly, and explicit `Undo last` / history-item `Restore` actions
 - on phone-sized layouts, both the `reader-bar` and revision-history rows can stack cleanly instead of forcing titles, badges, and restore controls into one cramped line
 - discussion continuity should survive across turns, including review workflows where the agent raises concerns and asks exactly one concrete next question at a time until the human changes mode
 - if the file changes on disk underneath the page, reload stays explicit and visible

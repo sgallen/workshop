@@ -1,14 +1,17 @@
-# Workshop Checkpoints and Branches PRD
+# Workshop Checkpoints and Restore PRD
 
 ## Purpose
 
-Define a familiar, low-complexity product model for saving meaningful document waypoints, bringing a past state forward safely, and preserving trust in the current draft without forcing users to think in version-control terms.
+Define the smallest credible product slice that lets a user save meaningful document waypoints, return to one later, and restore it safely without losing trust in the current draft.
 
-The goal is to keep the core loop easy to understand and practical to build now, while leaving room for more sophistication in later iterations if we need it.
+This PRD is intentionally narrow.
+
+It is about checkpoint and restore behavior for the current Workshop web app.
+It should stay compatible with future shells, but it should not expand into a full branching system yet.
 
 ## One-Line Product Goal
 
-Let a user preserve important document states, return to them later, and promote a past state into the current line of work without fear of losing work.
+Let a user save important document states and restore one later as the new current state without fear of losing work.
 
 ## Why This Matters
 
@@ -16,174 +19,173 @@ Workshop is supposed to support real iteration, not just one forward march.
 
 In real writing and thinking work, people often want to:
 
-- get back to a previous version
-- preserve a promising state before a risky change
-- try a different direction without losing the current one
-- compare "keep it tight" versus "go broader"
-- avoid the anxiety that experimentation might destroy a good draft
+- preserve a promising draft before a risky change
+- get back to an earlier version
+- compare a newer direction against a stronger earlier one
+- avoid the anxiety that experimentation might destroy something good
 
-Without checkpoints and a clear way to promote a past state, Workshop risks feeling fragile exactly when the creative work gets interesting.
+Without explicit checkpoints and a trustworthy restore model, Workshop risks feeling fragile exactly when the work becomes interesting.
 
 ## Product Position
 
 Revisions are the low-level safety layer.
 
-Checkpoints are the higher-level human-facing waypoints built on top of that layer.
+Checkpoints are the human-facing waypoints built on top of that layer.
 
-The product should distinguish:
+Workshop should distinguish:
 
-- automatic history
-- intentional saved waypoints
-- promotion of a past state
-- optional alternate continuations, described in product language rather than branch jargon
+- routine revision history
+- intentional checkpoints
+- restoring an older checkpoint as a new current state
 
-This should feel familiar, not complicated.
+This should feel familiar and safe.
 
-It is not version control for engineers.
-
-It is confidence and optionality for document work, with room to add complexity later if the product needs it.
+It is not git for writers.
+It is a calmer document history model that keeps experimentation trustworthy.
 
 ## v1 Goal
 
-Prove one clear, familiar loop:
+Prove one clear loop:
 
-1. user creates a checkpoint before or after an important change
-2. user can later jump back to inspect that state
-3. if user promotes that earlier state, Workshop makes it current and records a new checkpoint for that promotion
-4. the immediately preceding state remains in history because it was already checkpointed
-5. Workshop preserves the relationship between the current line of work and the promoted state
+1. user creates a checkpoint at a meaningful draft state
+2. user later opens the checkpoint list
+3. user chooses an earlier checkpoint and restores it
+4. Workshop makes that old state current by creating a new current state from it
+5. the state that was current just before restore remains in history
 
-If that loop feels understandable and easy to implement, Workshop can support deeper exploration later without making v1 more complicated than it needs to be.
+If that loop feels understandable and trustworthy, Workshop can grow into richer history behavior later.
 
 ## v1 Non-Goals
 
-This PRD does not try to solve:
+This PRD does not include:
 
-- full git-like branch management
-- arbitrary merge tools
-- deep tree visualizations
-- simultaneous collaborative branching by many users
-- external SCM replacement
-- line-by-line diff review across many divergent branches
+- explicit branch creation UI
+- branch graphs or tree visualizations
+- merge tools
+- git-style workflows
+- multi-user branching
+- deep diff tooling across many divergent paths
+- a broad shell/header redesign
 
-This is a product-native document branching model, not a developer VCS clone.
-
-## User Story
-
-Scott is working on a document with Workshop.
-
-At some point he likes the current state and wants to preserve it.
-
-Then he wants to try a more ambitious rewrite.
-
-If the rewrite goes badly, he wants to get back.
-
-If both directions are interesting, he wants to keep both alive for a while.
-
-Workshop should support that without making the product feel technical or intimidating.
+This is a checkpoints-and-restore slice only.
 
 ## Core Product Requirements
 
-### 1. Intentional and Automatic Checkpoints
+### 1. Explicit Checkpoint Creation
 
-Workshop must let the user create meaningful waypoints that feel like entries in a revision history, and it must automatically create checkpoints for milestone saves so important document states are preserved without relying only on manual actions.
-
-Requirements:
-
-- a checkpoint can be created explicitly by the user
-- Workshop must create automatic checkpoints for milestone saves according to a defined policy
-- each checkpoint is stamped with the date and time it was created
-- the checkpoint is attached to a concrete document state
-- checkpoint creation should be fast enough that users actually use it
-- the history UI should present checkpoints as a familiar revision history list
-
-### 2. Clear Restore Model
-
-Workshop must support safely returning to a previous checkpoint or revision state.
+Workshop must let the user create an intentional checkpoint.
 
 Requirements:
 
-- restore should preserve history rather than erase it
-- if the user promotes a restored state, Workshop should create a new checkpoint for that promotion
-- the user should understand that restore and promotion create a new current state from an older one
-- the pre-promotion current state should remain visible in history so nothing feels silently lost
-- the product should avoid ambiguous "did I lose my later work?" moments
+- the user can explicitly create a checkpoint
+- checkpoint creation is lightweight enough that people will actually use it
+- each checkpoint is attached to a concrete document state
+- each checkpoint records date and time
+- the user can optionally provide a short label
 
-### 3. Bringing a Past Checkpoint Forward
+### 2. Checkpoint List
 
-Workshop must support bringing an earlier checkpoint forward as the current document version.
-
-Requirements:
-
-- the user can choose an earlier checkpoint and bring it forward into the current line of work
-- bringing it forward should create a fresh checkpoint for the new current version
-- the source checkpoint and the version it replaced should remain visible in history
-- the product should describe this as bringing a version forward or restoring a past checkpoint, not as branch management
-- if the product later supports explicit alternate continuations, that language should stay secondary to the bring-forward model
-
-### 4. Human-Understandable History
-
-The history model must stay comprehensible.
+Workshop must present checkpoints as a human-readable history list.
 
 Requirements:
 
-- named checkpoints should stand out from routine revisions
-- branches should be described in product language, not engineering jargon alone
-- the user should be able to answer "where am I now?" and "what did this come from?"
+- checkpoints are shown in a dedicated history/checkpoints surface
+- checkpoint entries stand out from routine revisions
+- the current state is clearly indicated
+- the user can understand where they are now and what older checkpoint they are selecting
 
-### 5. Compatibility With Manual and Agent Changes
+### 3. Safe Restore Model
 
-Checkpoints and branches must work across all authorship modes.
+Workshop must let the user restore an older checkpoint safely.
 
 Requirements:
 
-- manual edits
+- restore does not erase history
+- restore creates a new current state from the selected older checkpoint
+- the state that was current immediately before restore remains available in history
+- restore should not create “did I lose later work?” ambiguity
+
+### 4. One Clear v1 Operation
+
+Workshop should use one primary product action for this slice:
+
+- `Restore checkpoint`
+
+Requirements:
+
+- v1 should not split this into separate concepts like restore, promote, and bring forward at the model level
+- explanatory copy may describe restore as bringing an older version forward
+- the underlying product operation should stay singular and easy to understand
+
+### 5. Compatibility With Existing Authorship Modes
+
+Checkpoint behavior must work across existing Workshop changes.
+
+Requirements:
+
+- manual saves
 - accepted proposals
-- restores
-- future branch creation
+- future restore actions
 
-all need to fit the same durable history model.
+must all fit the same durable document history model.
+
+## v1 Checkpoint Policy
+
+v1 must use a strict, simple policy so history stays understandable.
+
+### Manual checkpoints
+
+- explicit user-created checkpoints always create checkpoint records
+
+### Restore checkpoints
+
+- restoring a checkpoint creates a new revision
+- restoring a checkpoint also creates a new checkpoint record for that restored current state
+
+### Routine revisions
+
+- routine revisions may continue to exist underneath for manual saves and accepted proposals
+- not every revision becomes a named checkpoint in v1
+
+### Automatic checkpoints
+
+v1 automatic checkpointing is intentionally minimal.
+
+Requirements:
+
+- Workshop must automatically create a checkpoint on restore
+- Workshop does not need broad automatic checkpoint creation for every save in v1
+- if broader automatic checkpointing is added later, it should be treated as a separate follow-on decision
+
+This keeps checkpoint history meaningful instead of noisy.
 
 ## Product Flows
 
-### Flow 1: Save a Checkpoint
+### Flow 1: Save Checkpoint
 
 1. user reaches a meaningful draft state
-2. user taps `Save checkpoint`
-3. user optionally labels it
+2. user chooses `Save checkpoint`
+3. user optionally enters a short label
 4. Workshop records the checkpoint
 
 Success criteria:
 
-- checkpoint creation is lightweight and trustworthy
+- checkpoint creation feels lightweight and trustworthy
 
-### Flow 2: Restore a Prior State
+### Flow 2: Restore Earlier Checkpoint
 
-1. user opens history or checkpoints
+1. user opens the checkpoints list
 2. user selects an earlier checkpoint
-3. user previews or confirms restore
-4. Workshop restores that state as the current document
-5. if the user promotes that state, Workshop records the promotion as a new checkpoint and keeps the immediately prior state in history
-6. Workshop preserves later history and makes the prior source state visible
+3. user chooses `Restore checkpoint`
+4. Workshop restores that older state as the new current version
+5. Workshop records the restore as new history
+6. the previously current state remains visible in history
 
 Success criteria:
 
 - the user feels safe restoring
 - later work is not perceived as silently deleted
-- a promoted checkpoint becomes a new checkpoint without losing the state that was just replaced
-
-### Flow 3: Restore a Checkpoint
-
-1. user selects a checkpoint
-2. user chooses `Restore this checkpoint`
-3. Workshop makes that checkpoint current
-4. Workshop records the restore as a new checkpoint
-5. the immediately prior state remains visible in history
-
-Success criteria:
-
-- the user feels like they are restoring a checkpoint, not operating a source-control tool
-- earlier work is still visible and trustworthy
+- the new current state clearly comes from the selected older checkpoint
 
 ## UX Requirements
 
@@ -191,46 +193,33 @@ This flow should feel empowering, not technical.
 
 Required visible elements:
 
-- explicit checkpoint action inside the Checkpoints pane
-- history/checkpoint list
+- explicit `Save checkpoint` action
+- checkpoint/history list
 - clear current-state indicator
 - restore action
-- branch/create alternate direction action
+- optional checkpoint label input
 
-Mobile document header requirements:
+### Header and document identity requirements
 
-- the document header stays compact and legible on phone, even if it needs to wrap onto a second line
-- the hamburger menu remains the entry point to recent documents and the document list
-- the toolbar does not carry document identity
-- the filename is moved out of the top toolbar so the reader surface owns the document title
-- the toolbar makes room for a checkpoint/history icon button and an Edit / Discuss segmented control
-- use Font Awesome `faClockRotateLeft` for the checkpoint/history icon
-- tapping the checkpoint/history icon opens a right-side Checkpoints pane
-- the Checkpoints pane is a sibling to the Discuss pane
-- the Checkpoints pane contains the timeline and the Create checkpoint action
-- Create checkpoint lives in the Checkpoints pane, not directly in the main toolbar
+- the top header must leave room for a checkpoint/history action
+- the filename should not occupy primary space in the top toolbar
+- the filename should appear as quiet metadata above the document title inside the document surface
+- document identity should remain clear on phone without competing with primary actions
 
-Document surface requirements:
+Avoid in v1:
 
-- the filename appears as quiet metadata above the document H1 inside the document surface
-- the filename should be small, muted, single-line, and truncate with ellipsis if long
-- the filename should feel like an annotation to the document, not toolbar chrome
-
-Nice to avoid in v1:
-
+- branch jargon as the main language
 - complex branch graphs
-- engineering-centric terminology everywhere
 - too many irreversible-feeling choices
-- generic document-menu patterns that replace the familiar drawer-based navigation entry point
+- shell redesign that is larger than the checkpoint feature itself
 
 The experience should feel like:
 
-- saving a promising version and trying another path safely
+- saving a promising version and returning to it safely
 
 not:
 
 - operating a source-control dashboard
-- a traditional document editor that makes file identity compete with the reading surface
 
 ## Technical Requirements
 
@@ -238,42 +227,40 @@ not:
 
 Restore operations must create new durable state rather than mutating history in place.
 
-### 2. Stable Lineage Metadata
+### 2. Checkpoint Metadata
 
-Checkpoints and branches need lineage metadata that can answer:
+Each checkpoint needs enough metadata to answer:
 
-- what state did this come from?
+- what document state does this represent?
 - when was it created?
-- what kind of event created it?
+- was it manually created or created by restore?
+- what short label, if any, did the user provide?
 
-### 3. Shared Core Compatibility
+### 3. Revision Layer Reuse
 
-The underlying model should be designed to survive the later transition from current web shell to future mobile/native shells.
+This feature must build on the existing revision model rather than inventing a disconnected parallel system.
 
-### 4. Revision Model Reuse
+### 4. Future Lineage Compatibility
 
-This feature should build on the existing revision layer rather than inventing a disconnected parallel system.
+The underlying model should preserve enough lineage metadata to support richer future history or alternate-direction UI later, without requiring that UI in v1.
 
 ## Open Questions
 
-- How should the system limit automatic checkpoints so history stays useful and storage does not fill up?
-- How much preview is needed before promotion feels safe?
-- Should any later alternate-direction UI feel document-like or tab-like?
+Later, but not required for v1:
+
+- how much preview should exist before restore?
+- should checkpoints eventually support richer labels or summaries?
+- when, if ever, should Workshop expose alternate directions as a first-class user concept?
 
 ## Product Test
 
 This PRD is satisfied when all of the following are true:
 
-- a user can create a checkpoint that is identifiable by date and time
-- the user can return to a prior checkpoint safely
+- a user can explicitly create a checkpoint
+- a checkpoint is identifiable by date and time
+- the user can restore a prior checkpoint safely
 - restore preserves history
-- promoting a prior checkpoint creates a new checkpointed current state
-- the state immediately before that promotion remains available in history
-- the user can bring an older state forward without needing to think in git terms
-- the current line of work remains understandable
-- the document header remains compact and legible on mobile without forcing document identity and controls into one cramped row
-- the hamburger menu still opens the document / recents drawer
-- the filename no longer takes space in the top toolbar
-- a checkpoint/history icon fits in the toolbar without requiring an overflow menu
-- the filename appears quietly above the document title inside the document surface
-- the app still feels like an agent-first document workspace, not a traditional document editor
+- restoring an older checkpoint creates a new current state rather than overwriting history
+- the state immediately before restore remains available in history
+- the user can understand where they are now without needing git concepts
+- the app still feels like a focused human-agent document workspace rather than a version-control tool

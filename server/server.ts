@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { parseMarkdownSections } from '../core/sections/parse-markdown-sections.js';
 import type {
   Artifact,
+  CheckpointRecord,
   ProposalItemRecord,
   ProposalMutationResult,
   ProposalSetRecord,
@@ -18,6 +19,7 @@ import {
   runDocumentAgentTurn,
   startAgentConnect
 } from './codex-agent.js';
+import { buildArtifactOpenResult } from './document-open.js';
 import { createDocumentService } from './documents.js';
 import { createJsonFileStore, type ArtifactEntry, type Store } from './store.js';
 
@@ -300,6 +302,88 @@ function appendRevision(store: Store, relativePath: string, revision: RevisionRe
   artifactStore.getRevisions(store, relativePath).push(revision);
 }
 
+function listLatestCheckpoints(store: Store, relativePath: string): CheckpointRecord[] {
+  return [...artifactStore.getCheckpoints(store, relativePath)].reverse();
+}
+
+function appendCheckpoint(store: Store, relativePath: string, checkpoint: CheckpointRecord): void {
+  artifactStore.getCheckpoints(store, relativePath).push(checkpoint);
+}
+
+function getCheckpointById(store: Store, relativePath: string, checkpointId: string): CheckpointRecord {
+  const checkpoint = artifactStore.getCheckpoints(store, relativePath).find((candidate) => candidate.id === checkpointId);
+
+  if (!checkpoint) {
+    throw new Error('invalid_request');
+  }
+
+  return checkpoint;
+}
+
+function ensureRevisionForCurrentState(
+  store: Store,
+  relativePath: string,
+  markdown: string,
+  summary: string
+): RevisionRecord {
+  const revisions = artifactStore.getRevisions(store, relativePath);
+  const latestRevision = revisions[revisions.length - 1] ?? null;
+
+  if (latestRevision && latestRevision.markdown === markdown) {
+    return latestRevision;
+  }
+
+  const revision: RevisionRecord = {
+    id: createId('rev'),
+    documentId: relativePath,
+    createdAt: new Date().toISOString(),
+    summary,
+    source: 'manual_save',
+    proposalSetId: null,
+    markdown
+  };
+
+  appendRevision(store, relativePath, revision);
+  return revision;
+}
+
+function createCheckpointRecord(
+  relativePath: string,
+  revision: RevisionRecord,
+  source: CheckpointRecord['source'],
+  label: string | null,
+  sourceCheckpointId: string | null
+): CheckpointRecord {
+  return {
+    id: createId('chk'),
+    documentId: relativePath,
+    revisionId: revision.id,
+    createdAt: new Date().toISOString(),
+    label,
+    summary: label ?? revision.summary,
+    source,
+    sourceCheckpointId
+  };
+}
+
+function appendRestoreCheckpoint(
+  store: Store,
+  relativePath: string,
+  revision: RevisionRecord,
+  sourceCheckpointId: string | null,
+  label?: string | null
+): CheckpointRecord {
+  const checkpoint = createCheckpointRecord(
+    relativePath,
+    revision,
+    'restore',
+    label ?? null,
+    sourceCheckpointId
+  );
+  appendCheckpoint(store, relativePath, checkpoint);
+  return checkpoint;
+}
+
 function getUndoTargetRevision(store: Store, relativePath: string): {
   latestRevision: RevisionRecord;
   targetRevision: RevisionRecord;
@@ -339,6 +423,7 @@ async function buildArtifactState(relativePath: string): Promise<{
   latestProposalSet: ProposalSetRecord | null;
   proposalHistory: ProposalSetRecord[];
   revisions: RevisionRecord[];
+  checkpoints: CheckpointRecord[];
 }> {
   const store = await artifactStore.readStore();
 
@@ -347,7 +432,8 @@ async function buildArtifactState(relativePath: string): Promise<{
     proposalSet: getActiveProposalSet(store, relativePath),
     latestProposalSet: getLatestProposalSet(store, relativePath),
     proposalHistory: listProposalHistory(store, relativePath),
-    revisions: listLatestRevisions(store, relativePath)
+    revisions: listLatestRevisions(store, relativePath),
+    checkpoints: listLatestCheckpoints(store, relativePath)
   };
 }
 
@@ -363,6 +449,7 @@ async function buildProposalMutationResult(
     latestProposalSet: state.latestProposalSet,
     proposalHistory: state.proposalHistory,
     revisions: state.revisions,
+    checkpoints: state.checkpoints,
     appliedRevision
   };
 }
@@ -561,6 +648,10 @@ app.get('/api/health', (_request: Request, response: Response) => {
   });
 });
 
+app.get('/', (request: Request, response: Response) => {
+  response.redirect(302, `${getAppOrigin(request)}/`);
+});
+
 app.get('/api/config', (request: Request, response: Response) => {
   response.json({
     appOrigin: getAppOrigin(request),
@@ -584,7 +675,8 @@ app.get('/api/artifact', async (request: Request, response: Response) => {
       proposalSet: getActiveProposalSet(currentStore, artifact.relativePath),
       latestProposalSet: getLatestProposalSet(currentStore, artifact.relativePath),
       proposalHistory: listProposalHistory(currentStore, artifact.relativePath),
-      revisions: listLatestRevisions(currentStore, artifact.relativePath)
+      revisions: listLatestRevisions(currentStore, artifact.relativePath),
+      checkpoints: listLatestCheckpoints(currentStore, artifact.relativePath)
     });
   } catch (error) {
     response.status(400).json({
@@ -603,6 +695,41 @@ app.get('/api/artifact/meta', async (request: Request, response: Response) => {
   }
 });
 
+app.post('/api/artifact/open', async (request: Request, response: Response) => {
+  const body = request.body as {
+    path?: unknown;
+  } | undefined;
+
+  if (!(typeof body?.path === 'string' || typeof body?.path === 'undefined')) {
+    response.status(400).json({ error: 'path must be a string when provided.' });
+    return;
+  }
+
+  try {
+    const artifact = await documentService.loadArtifact(typeof body?.path === 'string' ? body.path : '');
+    const currentStore = await artifactStore.readStore();
+    const registered = artifactStore.touchRecentArtifact(currentStore, artifact, { onlyIfUntracked: true });
+
+    if (registered) {
+      await artifactStore.writeStore(currentStore);
+    }
+
+    response.json(buildArtifactOpenResult({
+      artifact,
+      proposalSet: getActiveProposalSet(currentStore, artifact.relativePath),
+      latestProposalSet: getLatestProposalSet(currentStore, artifact.relativePath),
+      proposalHistory: listProposalHistory(currentStore, artifact.relativePath),
+      revisions: listLatestRevisions(currentStore, artifact.relativePath),
+      checkpoints: listLatestCheckpoints(currentStore, artifact.relativePath),
+      resumed: !registered
+    }));
+  } catch (error) {
+    response.status(400).json({
+      error: error instanceof Error ? error.message : 'Failed to open artifact.'
+    });
+  }
+});
+
 app.get('/api/comments', async (request: Request, response: Response) => {
   try {
     const artifact = await documentService.loadArtifact(String(request.query.path ?? ''));
@@ -613,7 +740,8 @@ app.get('/api/comments', async (request: Request, response: Response) => {
       proposalSet: getActiveProposalSet(currentStore, artifact.relativePath),
       latestProposalSet: getLatestProposalSet(currentStore, artifact.relativePath),
       proposalHistory: listProposalHistory(currentStore, artifact.relativePath),
-      revisions: listLatestRevisions(currentStore, artifact.relativePath)
+      revisions: listLatestRevisions(currentStore, artifact.relativePath),
+      checkpoints: listLatestCheckpoints(currentStore, artifact.relativePath)
     });
   } catch (error) {
     response.status(400).json({
@@ -849,6 +977,108 @@ app.post('/api/artifact/save', async (request: Request, response: Response) => {
   }
 });
 
+app.post('/api/checkpoints', async (request: Request, response: Response) => {
+  const body = request.body as {
+    path?: unknown;
+    label?: unknown;
+  } | undefined;
+
+  if (typeof body?.path !== 'string') {
+    response.status(400).json({ error: 'Expected path.' });
+    return;
+  }
+
+  if (!(typeof body?.label === 'string' || typeof body?.label === 'undefined' || body?.label === null)) {
+    response.status(400).json({ error: 'label must be a string or null.' });
+    return;
+  }
+
+  try {
+    const { relativePath } = await documentService.resolveArtifactPath(body.path);
+    const currentStore = await artifactStore.readStore();
+    const markdown = (await loadArtifactPayload(relativePath)).markdown;
+    const trimmedLabel = typeof body.label === 'string' ? body.label.trim() : '';
+    const revision = ensureRevisionForCurrentState(
+      currentStore,
+      relativePath,
+      markdown,
+      trimmedLabel || 'Checkpoint'
+    );
+    const checkpoint = createCheckpointRecord(
+      relativePath,
+      revision,
+      'manual',
+      trimmedLabel || null,
+      null
+    );
+
+    appendCheckpoint(currentStore, relativePath, checkpoint);
+    await syncArtifactRecency(currentStore, relativePath);
+
+    response.json(await buildProposalMutationResult(relativePath, null));
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
+app.post('/api/checkpoints/:checkpointId/restore', async (request: Request, response: Response) => {
+  try {
+    const artifactPath = String(request.body?.path ?? '');
+    const { absolutePath, relativePath } = await documentService.resolveArtifactPath(artifactPath);
+    const currentStore = await artifactStore.readStore();
+    const activeProposalSet = getActiveProposalSet(currentStore, relativePath);
+
+    if (activeProposalSet) {
+      throw new Error('invalid_request');
+    }
+
+    const targetCheckpoint = getCheckpointById(currentStore, relativePath, String(request.params.checkpointId));
+    const targetRevision = getRevisionById(currentStore, relativePath, targetCheckpoint.revisionId);
+    const latestRevisions = listLatestRevisions(currentStore, relativePath);
+    const latestRevision = latestRevisions[0] ?? null;
+
+    if (!latestRevision || latestRevision.id === targetRevision.id) {
+      throw new Error('invalid_request');
+    }
+
+    const originalMarkdown = await fs.readFile(absolutePath, 'utf8');
+
+    if (originalMarkdown !== latestRevision.markdown) {
+      throw new Error('proposal_conflict');
+    }
+
+    const checkpointSummary = targetCheckpoint.label?.trim() || targetCheckpoint.summary;
+    const revision: RevisionRecord = {
+      id: createId('rev'),
+      documentId: relativePath,
+      createdAt: new Date().toISOString(),
+      summary: `Restore ${checkpointSummary}`,
+      source: 'restore_revision',
+      proposalSetId: targetRevision.proposalSetId,
+      markdown: targetRevision.markdown
+    };
+
+    appendRevision(currentStore, relativePath, revision);
+    appendRestoreCheckpoint(
+      currentStore,
+      relativePath,
+      revision,
+      targetCheckpoint.id,
+      checkpointSummary
+    );
+    await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, targetRevision.markdown, currentStore);
+    await syncArtifactRecency(currentStore, relativePath);
+
+    response.json(await buildProposalMutationResult(relativePath, revision));
+  } catch (error) {
+    response.status(400).json({
+      error: toErrorMessage(error)
+    });
+  }
+});
+
 app.post('/api/revisions/undo-last', async (request: Request, response: Response) => {
   try {
     const artifactPath = String(request.body?.path ?? '');
@@ -878,6 +1108,7 @@ app.post('/api/revisions/undo-last', async (request: Request, response: Response
     };
 
     appendRevision(currentStore, relativePath, revision);
+    appendRestoreCheckpoint(currentStore, relativePath, revision, null, revision.summary);
     await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, targetRevision.markdown, currentStore);
     await syncArtifactRecency(currentStore, relativePath);
 
@@ -925,6 +1156,7 @@ app.post('/api/revisions/:revisionId/restore', async (request: Request, response
     };
 
     appendRevision(currentStore, relativePath, revision);
+    appendRestoreCheckpoint(currentStore, relativePath, revision, null, revision.summary);
     await writeDocumentAndStoreSafely(absolutePath, originalMarkdown, targetRevision.markdown, currentStore);
     await syncArtifactRecency(currentStore, relativePath);
 

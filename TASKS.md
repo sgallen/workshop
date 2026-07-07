@@ -41,7 +41,7 @@ Keep the shared task board for cross-project coordination and repo-level priorit
   - Preserve explicit freshness/reload cues across header, discussion, and proposal-review surfaces.
   - Keep recent discussion continuity explicit in the agent-turn contract, including one-question-at-a-time review workflows that persist until the human changes mode.
   - Keep revision awareness legible from the document view without forcing a separate history workflow, including on phone-sized layouts.
-  - Treat the compact `View history` panel, latest-revision jump path, `Undo last`, and direct history-item restore as the baseline revision-history affordance.
+  - Treat the compact `View history` panel, named checkpoints, latest-revision jump path, `Undo last`, and direct history-item restore as the baseline revision-history affordance.
   - Define the minimum useful agent actions for v1.
   - Keep `docs/agent-editing-v1-blueprint.md` aligned with the implementation as the slice sharpens.
 

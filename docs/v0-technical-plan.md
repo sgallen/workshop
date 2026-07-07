@@ -173,6 +173,12 @@ Keep URLs simple and stable.
 
 The shareable link should usually go directly to `/?path=<repo-relative-document-path>`.
 
+Current hosted-local open/resume seam:
+
+- `POST /api/artifact/open`
+  - input: document `path`
+  - output: artifact state plus `documentUrl`, `resolvedPath`, `title`, and `resumed`
+
 ## Minimal Agent Handoff Contract
 
 v0 needs an explicit contract for how an agent opens a document in Workshop.
@@ -183,7 +189,7 @@ The contract should be:
 2. Workshop opens or resumes a document session for that path
 3. Workshop returns a stable document URL
 4. the human lands directly in the document view
-5. the UI exposes document identity and revision state without exposing local-path complexity
+5. the UI exposes document identity, a lightweight copy-link affordance for that stable URL, and revision state without exposing local-path complexity
 
 This contract matters because the user experience should feel like:
 
@@ -199,7 +205,8 @@ Implications for v0:
 - path resolution belongs at the server boundary, not in the shared human-facing flow
 - document metadata should support reload/revision awareness
 - the returned link should be the primary object an agent shares back into chat
-- phone-sized document controls and revision rows should remain legible without horizontal crowding
+- phone-sized document controls and history rows should remain legible without horizontal crowding
+- named checkpoints should sit alongside append-only revisions rather than forcing a separate history workspace
 - recent human and agent discussion should remain available to the turn runner so persistent review workflows do not collapse into stateless prompt/response turns
 
 Future PRD placeholder:

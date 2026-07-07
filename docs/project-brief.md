@@ -148,9 +148,11 @@ Focus on:
 In the current v0 loop, revision state should stay explicit from the document view itself:
 
 - the document header should keep identity and revision cues visible
+- the document header should also expose a lightweight copy-link action for the stable Workshop URL
 - a compact `View history` panel should stay one tap away instead of becoming a separate workspace
+- named checkpoints should be easy to save when the human reaches a meaningful draft state
 - the latest revision summary should reopen history directly
-- `Undo last` and direct per-revision `Restore` should be easy to find
+- `Undo last` and direct history-item `Restore` should be easy to find
 - on phone-sized layouts, revision rows and document controls should stack cleanly rather than crowding into one forced line
 - recent discussion should stay in turn context so clarifying-question workflows do not collapse into stateless prompt/response turns
 

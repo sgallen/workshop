@@ -2,9 +2,19 @@ import { FormEvent, MouseEvent, PointerEvent, useEffect, useMemo, useRef, useSta
 import { marked } from 'marked';
 import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import { faPenToSquare } from '@fortawesome/free-regular-svg-icons';
-import { faArrowUp, faCircleNotch } from '@fortawesome/free-solid-svg-icons';
+import { faArrowUp, faCircleNotch, faClockRotateLeft } from '@fortawesome/free-solid-svg-icons';
 import { buildDisplayedRecents } from '../core/recents/build-displayed-recents';
-import type { Artifact, Comment, ProposalMutationResult, ProposalSetRecord, RecentArtifact, RevisionRecord } from '../core/types';
+import { parseMarkdownSections } from '../core/sections/parse-markdown-sections';
+import type {
+  Artifact,
+  CheckpointRecord,
+  Comment,
+  ProposalMutationResult,
+  ProposalSetRecord,
+  RecentArtifact,
+  RevisionRecord
+} from '../core/types';
+import { buildHistoryEntries, getShortSentence, type HistoryEntry } from './lib/document-history';
 import { formatArtifactTimestamp, formatRecentActivity } from './lib/formatting';
 import { readJsonResponse } from './lib/read-json-response';
 import { AgentConnectionStatus, type AgentConnectionState } from './components/AgentConnectionStatus';
@@ -59,30 +69,13 @@ function createDraftArtifact(): Artifact {
   };
 }
 
-function getShortSentence(text: string | null | undefined): string | null {
-  const normalized = text?.trim();
-
-  if (!normalized) {
-    return null;
-  }
-
-  const firstSentenceMatch = normalized.match(/^(.+?[.!?])(?:\s|$)/);
-  const firstSentence = firstSentenceMatch ? firstSentenceMatch[1].trim() : normalized;
-
-  if (firstSentence.length <= 160) {
-    return firstSentence;
-  }
-
-  const sliced = firstSentence.slice(0, 157).trimEnd();
-  return `${sliced}...`;
-}
-
 type ArtifactPayload = {
   artifact?: Artifact;
   proposalSet?: ProposalSetRecord | null;
   latestProposalSet?: ProposalSetRecord | null;
   proposalHistory?: ProposalSetRecord[];
   revisions?: RevisionRecord[];
+  checkpoints?: CheckpointRecord[];
   error?: string;
 };
 
@@ -95,36 +88,6 @@ type AgentTurnPayload = ArtifactPayload & {
     sectionId: string | null;
   }>;
 };
-
-function describeRevisionSource(source: RevisionRecord['source']): string {
-  switch (source) {
-    case 'proposal_item_accept':
-      return 'Accepted change';
-    case 'proposal_set_accept_all':
-      return 'Accepted all';
-    case 'restore_revision':
-      return 'Restored revision';
-    case 'manual_save':
-      return 'Manual save';
-    default:
-      return 'Revision';
-  }
-}
-
-function getRevisionSourceBadgeLabel(source: RevisionRecord['source']): string {
-  switch (source) {
-    case 'proposal_item_accept':
-      return 'Accept';
-    case 'proposal_set_accept_all':
-      return 'Accept all';
-    case 'restore_revision':
-      return 'Restore';
-    case 'manual_save':
-      return 'Manual';
-    default:
-      return 'Revision';
-  }
-}
 
 function WorkshopWordmark() {
   return (
@@ -158,6 +121,7 @@ export function App() {
   const [activeProposalSet, setActiveProposalSet] = useState<ProposalSetRecord | null>(null);
   const [proposalHistory, setProposalHistory] = useState<ProposalSetRecord[]>([]);
   const [revisions, setRevisions] = useState<RevisionRecord[]>([]);
+  const [checkpoints, setCheckpoints] = useState<CheckpointRecord[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [composerBody, setComposerBody] = useState('');
@@ -183,6 +147,13 @@ export function App() {
   const [creatingDocument, setCreatingDocument] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
   const [highlightedRevisionId, setHighlightedRevisionId] = useState<string | null>(null);
+  const [highlightedCheckpointId, setHighlightedCheckpointId] = useState<string | null>(null);
+  const [selectedHistoryEntryId, setSelectedHistoryEntryId] = useState<string | null>(null);
+  const [createCheckpointOpen, setCreateCheckpointOpen] = useState(false);
+  const [checkpointLabel, setCheckpointLabel] = useState('');
+  const [checkpointPending, setCheckpointPending] = useState(false);
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'manual' | 'auto'>('all');
+  const [showFullHistory, setShowFullHistory] = useState(false);
 
   function getComposerDraftStorageKey(path: string) {
     return `${COMPOSER_DRAFT_STORAGE_PREFIX}${path}`;
@@ -323,12 +294,60 @@ export function App() {
     ? `Newer version saved ${formatArtifactTimestamp(remoteUpdatedAt)}`
     : null;
   const historyActionNotice = hasPendingProposal
-    ? 'Resolve the pending proposal before changing document history.'
+    ? 'Resolve the pending proposal before changing checkpoints or restoring document history.'
     : hasRemoteUpdate
-      ? 'Reload the document before using undo or restore.'
-      : revisions.length < 2
-        ? 'Undo becomes available after there is an earlier saved revision to return to.'
-        : null;
+      ? 'Reload the document before saving a checkpoint or restoring history.'
+      : null;
+  const historyEntries = useMemo<HistoryEntry[]>(() => buildHistoryEntries({
+    checkpoints,
+    revisions,
+    highlightedCheckpointId,
+    highlightedRevisionId
+  }), [checkpoints, revisions, highlightedCheckpointId, highlightedRevisionId]);
+  const selectedHistoryEntry = useMemo(() => {
+    if (!selectedHistoryEntryId) {
+      return null;
+    }
+
+    return historyEntries.find((entry) => entry.id === selectedHistoryEntryId) ?? null;
+  }, [historyEntries, selectedHistoryEntryId]);
+  const selectedHistoryRevision = useMemo(() => {
+    if (!selectedHistoryEntry) {
+      return null;
+    }
+
+    return revisions.find((revision) => revision.id === selectedHistoryEntry.revisionId) ?? null;
+  }, [revisions, selectedHistoryEntry]);
+  const previewRevision = selectedHistoryEntry && !selectedHistoryEntry.current ? selectedHistoryRevision : null;
+  const previewSections = useMemo(() => {
+    if (!previewRevision) {
+      return null;
+    }
+
+    return parseMarkdownSections(previewRevision.markdown).map((section) => ({
+      ...section,
+      renderedHtml: marked.parse(section.markdown) as string,
+      comments: []
+    }));
+  }, [previewRevision]);
+  const displayPreviewingHistory = previewRevision !== null;
+  const historyHasManualEntries = historyEntries.some((entry) => entry.kind === 'manual');
+  const historyHasAutoEntries = historyEntries.some((entry) => entry.kind === 'automatic');
+  const showHistoryFilters = historyEntries.length > 6 && historyHasManualEntries && historyHasAutoEntries;
+  const filteredHistoryEntries = historyFilter === 'manual'
+    ? historyEntries.filter((entry) => entry.kind === 'manual')
+    : historyFilter === 'auto'
+      ? historyEntries.filter((entry) => entry.kind === 'automatic')
+      : historyEntries;
+  const visibleHistoryEntries = showFullHistory ? filteredHistoryEntries : filteredHistoryEntries.slice(0, 8);
+  const hiddenHistoryCount = Math.max(filteredHistoryEntries.length - visibleHistoryEntries.length, 0);
+  const canToggleHistoryExpansion = filteredHistoryEntries.length > 8;
+  const historyCurrentEntry = historyEntries.find((entry) => entry.current) ?? historyEntries[0] ?? null;
+  const displayedSections = displayPreviewingHistory ? previewSections ?? [] : artifact?.sections ?? [];
+  const displayedDocumentTitle = artifact?.title ?? '';
+  const previewHistorySummary = selectedHistoryEntry && displayPreviewingHistory
+    ? `Previewing ${selectedHistoryEntry.title} from ${selectedHistoryEntry.timestampLabel}.`
+    : null;
   const reviewStateLabel = activeProposalSet
     ? `${pendingProposalCount} ${pendingProposalCount === 1 ? 'change' : 'changes'}`
     : null;
@@ -389,7 +408,8 @@ export function App() {
       ? Boolean(draftDocumentTitle.trim())
       : editBody !== artifact.markdown
     : false;
-  const interactionLocked = loading || submitting || agentTurnPending || savingEdit || creatingDocument;
+  const interactionLocked = loading || submitting || agentTurnPending || savingEdit || creatingDocument || checkpointPending;
+  const rightRailOpen = railOpen || historyOpen;
   const agentConnectionState: AgentConnectionState = agentAuth?.state === 'connected'
     ? 'connected'
     : agentAuth?.state === 'connecting'
@@ -664,6 +684,7 @@ export function App() {
     payload: ArtifactPayload | ProposalMutationResult,
     options?: {
       highlightedRevisionId?: string | null;
+      highlightedCheckpointId?: string | null;
       keepHistoryOpen?: boolean;
     }
   ) {
@@ -677,6 +698,7 @@ export function App() {
     setActiveProposalSet(payload.proposalSet ?? null);
     setProposalHistory(payload.proposalHistory ?? []);
     setRevisions(payload.revisions ?? []);
+    setCheckpoints(payload.checkpoints ?? []);
     setLastLoadedUpdatedAt(nextArtifact.updatedAt);
     setHasRemoteUpdate(false);
     setRemoteUpdatedAt(null);
@@ -686,6 +708,9 @@ export function App() {
     setEditNotice(null);
     setHistoryOpen(options?.keepHistoryOpen ?? false);
     setHighlightedRevisionId(options?.highlightedRevisionId ?? null);
+    setHighlightedCheckpointId(options?.highlightedCheckpointId ?? null);
+    setCheckpointLabel('');
+    setCreateCheckpointOpen(false);
     setDraftDocumentTitle('');
     setAttachedSectionId((current) => (current && nextArtifact.sections.some((section) => section.id === current) ? current : null));
     setArtifactPath(nextArtifact.relativePath);
@@ -729,6 +754,41 @@ export function App() {
     };
   }, [highlightedRevisionId]);
 
+  useEffect(() => {
+    if (!highlightedCheckpointId) {
+      return;
+    }
+
+    const timeoutId = window.setTimeout(() => {
+      setHighlightedCheckpointId((current) => (current === highlightedCheckpointId ? null : current));
+    }, 2800);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [highlightedCheckpointId]);
+
+  useEffect(() => {
+    if (historyEntries.length === 0) {
+      setSelectedHistoryEntryId(null);
+      return;
+    }
+
+    setSelectedHistoryEntryId((current) => {
+      if (current && historyEntries.some((entry) => entry.id === current)) {
+        return current;
+      }
+
+      return historyEntries.find((entry) => entry.current)?.id ?? historyEntries[0]?.id ?? null;
+    });
+  }, [historyEntries]);
+
+  useEffect(() => {
+    if (!historyOpen) {
+      setSelectedHistoryEntryId(historyCurrentEntry?.id ?? null);
+    }
+  }, [historyCurrentEntry, historyOpen]);
+
   async function loadArtifact(nextPath: string, options?: { preserveCurrentOnError?: boolean }) {
     const preserveCurrentOnError = options?.preserveCurrentOnError ?? false;
 
@@ -757,6 +817,7 @@ export function App() {
         setActiveProposalSet(null);
         setProposalHistory([]);
         setRevisions([]);
+        setCheckpoints([]);
         setLastLoadedUpdatedAt(null);
         setHasRemoteUpdate(false);
         setRemoteUpdatedAt(null);
@@ -952,6 +1013,45 @@ export function App() {
     await loadArtifact(resolvedArtifactPath, { preserveCurrentOnError: true });
   }
 
+  function closeHistoryPane() {
+    setHistoryOpen(false);
+    setSelectedHistoryEntryId(historyCurrentEntry?.id ?? null);
+  }
+
+  function handleSelectHistoryEntry(entryId: string) {
+    setSelectedHistoryEntryId(entryId);
+  }
+
+  function openCreateCheckpoint() {
+    setCreateCheckpointOpen(true);
+  }
+
+  function closeCreateCheckpoint() {
+    setCreateCheckpointOpen(false);
+    setCheckpointLabel('');
+  }
+
+  async function handleRestoreSelectedHistory() {
+    if (!selectedHistoryEntry || selectedHistoryEntry.current) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      'Restore this checkpoint? Workshop will first save your current document as a checkpoint, then restore the selected version as current.'
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    if (selectedHistoryEntry.checkpointId) {
+      await handleRestoreCheckpoint(selectedHistoryEntry.checkpointId);
+      return;
+    }
+
+    await handleRestoreRevision(selectedHistoryEntry.revisionId);
+  }
+
   async function handleRestoreRevision(revisionId: string) {
     if (interactionLocked || editMode || !resolvedArtifactPath || hasPendingProposal || hasRemoteUpdate) {
       return;
@@ -976,8 +1076,7 @@ export function App() {
       }
 
       applyArtifactPayload(payload, {
-        highlightedRevisionId: payload.appliedRevision?.id ?? null,
-        keepHistoryOpen: Boolean(payload.appliedRevision)
+        highlightedRevisionId: payload.appliedRevision?.id ?? null
       });
       void loadRecents();
     } catch (caughtError) {
@@ -988,6 +1087,88 @@ export function App() {
       }
 
       setError(message);
+    }
+  }
+
+  async function handleCreateCheckpoint() {
+    if (interactionLocked || editMode || !resolvedArtifactPath || hasPendingProposal || hasRemoteUpdate) {
+      return;
+    }
+
+    setCheckpointPending(true);
+    setError(null);
+
+    try {
+      const response = await fetch('/api/checkpoints', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          path: resolvedArtifactPath,
+          label: checkpointLabel.trim() || null
+        })
+      });
+      const payload = await readJsonResponse<(ProposalMutationResult & { error?: string })>(response);
+
+      if (!response.ok || !payload.artifact) {
+        throw new Error(payload.error ?? 'Failed to save checkpoint.');
+      }
+
+      const nextCheckpointId = payload.checkpoints?.[0]?.id ?? null;
+      applyArtifactPayload(payload, {
+        highlightedCheckpointId: nextCheckpointId,
+        keepHistoryOpen: true
+      });
+      void loadRecents();
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : 'Failed to save checkpoint.');
+    } finally {
+      setCheckpointPending(false);
+    }
+  }
+
+  async function handleRestoreCheckpoint(checkpointId: string) {
+    if (interactionLocked || editMode || !resolvedArtifactPath || hasPendingProposal || hasRemoteUpdate) {
+      return;
+    }
+
+    setCheckpointPending(true);
+    setError(null);
+
+    try {
+      const response = await fetch(`/api/checkpoints/${encodeURIComponent(checkpointId)}/restore`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          path: resolvedArtifactPath
+        })
+      });
+      const payload = await readJsonResponse<(ProposalMutationResult & { error?: string })>(response);
+
+      if (!response.ok || !payload.artifact) {
+        throw new Error(payload.error ?? 'Failed to restore that checkpoint.');
+      }
+
+      const nextCheckpointId = payload.checkpoints?.[0]?.id ?? null;
+      applyArtifactPayload(payload, {
+        highlightedRevisionId: payload.appliedRevision?.id ?? null,
+        highlightedCheckpointId: nextCheckpointId,
+        keepHistoryOpen: true
+      });
+      void loadRecents();
+    } catch (caughtError) {
+      const message = caughtError instanceof Error ? caughtError.message : 'Failed to restore that checkpoint.';
+
+      if (message.includes('no longer matches the current document')) {
+        setHasRemoteUpdate(true);
+      }
+
+      setError(message);
+    } finally {
+      setCheckpointPending(false);
     }
   }
 
@@ -1006,6 +1187,7 @@ export function App() {
     setActiveProposalSet(null);
     setProposalHistory([]);
     setRevisions([]);
+    setCheckpoints([]);
     setHistoryOpen(false);
     setLastLoadedUpdatedAt(null);
     setHasRemoteUpdate(false);
@@ -1039,6 +1221,7 @@ export function App() {
     setEditBaseUpdatedAt(null);
     setEditNotice(null);
     setRevisions([]);
+    setCheckpoints([]);
     setHistoryOpen(false);
     setError(null);
     const params = new URLSearchParams(window.location.search);
@@ -1412,17 +1595,18 @@ export function App() {
       return;
     }
 
-    if (!railOpen) {
+    if (!rightRailOpen) {
       return;
     }
 
     const target = event.target;
 
-    if (target instanceof Element && target.closest('.discussion-rail')) {
+    if (target instanceof Element && (target.closest('.discussion-rail') || target.closest('.history-rail'))) {
       return;
     }
 
     setRailOpen(false);
+    setHistoryOpen(false);
   }
 
   function renderProposalTimelineMarker(proposalSet: ProposalSetRecord) {
@@ -1639,6 +1823,7 @@ export function App() {
                     type="button"
                     disabled={interactionLocked}
                     onClick={() => {
+                      setHistoryOpen(false);
                       setRailOpen(false);
                       setMenuOpen(true);
                     }}
@@ -1649,14 +1834,6 @@ export function App() {
                       <span />
                     </span>
                   </button>
-                  <div className="reader-meta">
-                    <p
-                      className="reader-title"
-                      title={isDraftDocument ? (draftDocumentTitle.trim() || DRAFT_ARTIFACT_TITLE) : artifact.title}
-                    >
-                      {isDraftDocument ? (draftDocumentTitle.trim() || DRAFT_ARTIFACT_TITLE) : artifact.title}
-                    </p>
-                  </div>
                 </div>
                 <div className="reader-actions" role="group" aria-label="Document actions">
                   {isDraftDocument && !editMode ? (
@@ -1689,34 +1866,49 @@ export function App() {
                         {savingEdit ? (isDraftDocument ? 'Creating…' : 'Saving…') : (isDraftDocument ? 'Create' : 'Save')}
                       </button>
                     </>
-                  ) : !isDraftDocument ? (
-                    <div className="reader-mode-switch" role="group" aria-label="Document mode">
+                  ) : !isDraftDocument && !railOpen && !historyOpen ? (
+                    <>
                       <button
-                        className={`secondary-button compact-button reader-rail-button reader-mode-button${!railOpen ? ' reader-mode-button-active' : ''}`}
-                        type="button"
-                        disabled={interactionLocked || hasPendingProposal}
-                        title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
-                        aria-pressed={!railOpen}
-                        onClick={() => {
-                          setRailOpen(false);
-                          handleEnterEditMode();
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        className={`secondary-button compact-button reader-rail-button reader-mode-button${railOpen ? ' reader-mode-button-active' : ''}`}
+                        className="secondary-button compact-button reader-rail-button icon-button"
                         type="button"
                         disabled={interactionLocked}
-                        aria-pressed={railOpen}
+                        aria-controls={REVISION_HISTORY_PANEL_ID}
+                        aria-label="Show history"
                         onClick={() => {
                           setMenuOpen(false);
-                          setRailOpen(true);
+                          setRailOpen(false);
+                          setHistoryOpen(true);
                         }}
                       >
-                        Discuss
+                        <FontAwesomeIcon icon={faClockRotateLeft} />
                       </button>
-                    </div>
+                      <div className="reader-mode-switch" role="group" aria-label="Document mode">
+                        <button
+                          className="reader-mode-button"
+                          type="button"
+                          disabled={interactionLocked || hasPendingProposal}
+                          title={hasPendingProposal ? 'Accept or reject the pending proposal before editing directly.' : undefined}
+                          onClick={() => {
+                            setRailOpen(false);
+                            handleEnterEditMode();
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          className="reader-mode-button"
+                          type="button"
+                          disabled={interactionLocked}
+                          onClick={() => {
+                            setHistoryOpen(false);
+                            setMenuOpen(false);
+                            setRailOpen(true);
+                          }}
+                        >
+                          Discuss
+                        </button>
+                      </div>
+                    </>
                   ) : null}
                 </div>
               </div>
@@ -1742,100 +1934,8 @@ export function App() {
               ) : null}
             </header>
 
-            {!editMode && !isDraftDocument && historyOpen ? (
-              <section
-                id={REVISION_HISTORY_PANEL_ID}
-                className="history-panel"
-                role="region"
-                aria-labelledby={REVISION_HISTORY_HEADING_ID}
-                aria-describedby={REVISION_HISTORY_COUNT_ID}
-              >
-                <div className="history-panel-header">
-                  <div>
-                    <p className="proposal-kicker">Document history</p>
-                    <h2 id={REVISION_HISTORY_HEADING_ID} className="history-panel-title">Revision history</h2>
-                    <p id={REVISION_HISTORY_COUNT_ID} className="history-panel-count">
-                      {revisions.length} {revisions.length === 1 ? 'saved revision' : 'saved revisions'}
-                    </p>
-                  </div>
-                  <div className="history-panel-copy-block">
-                    <p className="history-panel-copy">
-                      History stays attached to the document. The newest saved state is always listed first, and restore creates a new current revision instead of erasing the timeline.
-                    </p>
-                    {historyActionNotice ? (
-                      <p className="history-panel-note">{historyActionNotice}</p>
-                    ) : null}
-                  </div>
-                </div>
-                {revisions.length > 0 ? (
-                  <ol className="history-list" aria-label="Saved revisions, newest first">
-                    {revisions.map((revision, index) => {
-                      const revisionDetail = `${describeRevisionSource(revision.source)} · ${formatArtifactTimestamp(revision.createdAt)}${index === 0 ? ' · Current document state' : ''}`;
-
-                      return (
-                        <li
-                          key={revision.id}
-                          aria-current={index === 0 ? 'step' : undefined}
-                          aria-label={
-                            index === 0
-                              ? `${revision.summary}, current revision`
-                              : `${revision.summary}, ${index} back`
-                          }
-                          className={`history-item${index === 0 ? ' history-item-highlighted' : ''}${highlightedRevisionId === revision.id ? ' history-item-flash' : ''}`}
-                        >
-                          <div className="history-item-main">
-                            <p className="history-item-summary">{revision.summary}</p>
-                            <p className="history-item-detail">{revisionDetail}</p>
-                          </div>
-                          <div
-                            className="history-item-actions"
-                            role="group"
-                            aria-label={index === 0 ? 'Current revision status' : `Revision actions for ${revision.summary}`}
-                          >
-                            <span className="meta-pill meta-pill-muted history-item-source-badge">
-                              {getRevisionSourceBadgeLabel(revision.source)}
-                            </span>
-                            {index === 0 ? (
-                              <span className="meta-pill meta-pill-success history-item-badge" aria-label="Current revision">Current</span>
-                            ) : (
-                              <>
-                                <span className="meta-pill meta-pill-muted history-item-distance-badge">{index} back</span>
-                                <button
-                                  className="secondary-button compact-button history-item-button"
-                                  type="button"
-                                  disabled={interactionLocked || hasPendingProposal || hasRemoteUpdate}
-                                  aria-label={`Restore ${revision.summary}, ${index} back`}
-                                  title={
-                                    hasPendingProposal
-                                      ? 'Resolve the pending proposal before restoring document history.'
-                                      : hasRemoteUpdate
-                                        ? 'Reload the document before restoring history.'
-                                        : `Restore ${index} back as a new current revision.`
-                                  }
-                                  onClick={() => void handleRestoreRevision(revision.id)}
-                                >
-                                  Restore
-                                </button>
-                              </>
-                            )}
-                          </div>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                ) : (
-                  <div className="history-empty-state">
-                    <p className="history-empty-title">No revisions yet.</p>
-                    <p className="context-subtle">
-                      Accepted agent changes and manual saves will appear here once the document starts changing.
-                    </p>
-                  </div>
-                )}
-              </section>
-            ) : null}
-
             <div
-              className={`reader-layout${railOpen ? ' reader-layout-with-rail' : ''}`}
+              className={`reader-layout${rightRailOpen ? ' reader-layout-with-rail' : ''}`}
               onPointerDown={handleReaderSurfacePointerDown}
             >
               <section className="artifact-card artifact-reader" role="region" aria-label="Document workspace">
@@ -1870,6 +1970,15 @@ export function App() {
                     data-busy={interactionLocked ? 'true' : 'false'}
                     aria-busy={interactionLocked ? 'true' : 'false'}
                   >
+                    {!isDraftDocument ? (
+                      <p className="document-filename-meta" title={displayedDocumentTitle}>{displayedDocumentTitle}</p>
+                    ) : null}
+                    {previewHistorySummary ? (
+                      <div className="history-preview-banner" role="status" aria-live="polite">
+                        <p className="history-preview-label">History preview</p>
+                        <p className="history-preview-copy">{previewHistorySummary}</p>
+                      </div>
+                    ) : null}
                     {isDraftDocument ? (
                       <div className="document-empty-state document-draft-state" role="status" aria-live="polite">
                         <p className="proposal-kicker">New document</p>
@@ -1919,8 +2028,8 @@ export function App() {
                         </div>
                       </div>
                     ) : null}
-                    {artifact.sections.map((section) => {
-                      const proposalItem = proposalItemsBySection.get(section.id) ?? null;
+                    {displayedSections.map((section) => {
+                      const proposalItem = displayPreviewingHistory ? null : proposalItemsBySection.get(section.id) ?? null;
                       const proposalCompareMode = proposalItem ? proposalCompareModeById[proposalItem.id] ?? 'proposed' : null;
                       const proposalRenderedHtml = proposalItem
                         ? marked.parse(
@@ -1931,11 +2040,11 @@ export function App() {
                       return (
                         <article
                           className={`section-card${proposalItem ? ' section-card-with-proposal' : ''}`}
-                          data-attached={attachedSectionId === section.id ? 'true' : 'false'}
+                          data-attached={!displayPreviewingHistory && attachedSectionId === section.id ? 'true' : 'false'}
                           data-pending={proposalItem ? 'true' : 'false'}
                           id={section.id}
                           key={section.id}
-                          onClick={(event) => handleSectionHeadingClick(section.id, event)}
+                          onClick={displayPreviewingHistory ? undefined : (event) => handleSectionHeadingClick(section.id, event)}
                         >
                           {!proposalItem ? (
                             <div
@@ -1965,6 +2074,233 @@ export function App() {
                   </div>
                 )}
               </section>
+
+              {!editMode && !isDraftDocument ? (
+                <aside
+                  className={`discussion-rail history-rail${historyOpen ? ' discussion-rail-open' : ''}`}
+                  aria-label="Checkpoints"
+                  onPointerDown={preventPanelDismiss}
+                  onClick={preventPanelDismiss}
+                >
+                  <div className="discussion-rail-panel history-rail-panel" role="region" aria-label="Document history panel">
+                    <div className="discussion-rail-header">
+                      <div className="discussion-rail-header-main">
+                        <div className="discussion-rail-agent">
+                          <p className="discussion-rail-agent-name">Checkpoints</p>
+                          <p id={REVISION_HISTORY_COUNT_ID} className="discussion-rail-agent-status">
+                            {historyEntries.length} {historyEntries.length === 1 ? 'history item' : 'history items'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        className="workspace-menu-close"
+                        type="button"
+                        onClick={closeHistoryPane}
+                        aria-label="Close history"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div
+                      className="discussion-thread history-rail-thread"
+                      role="region"
+                      aria-labelledby={REVISION_HISTORY_PANEL_ID}
+                      aria-describedby={REVISION_HISTORY_COUNT_ID}
+                      aria-busy={interactionLocked ? 'true' : 'false'}
+                    >
+                      <section id={REVISION_HISTORY_PANEL_ID} className="history-panel history-panel-embedded">
+                        <div className="history-checkpoint-create">
+                          {!createCheckpointOpen ? (
+                            <button
+                              className="quiet-inline-action history-create-toggle"
+                              type="button"
+                              disabled={interactionLocked || hasPendingProposal || hasRemoteUpdate}
+                              title={
+                                hasPendingProposal
+                                  ? 'Resolve the pending proposal before saving a checkpoint.'
+                                  : hasRemoteUpdate
+                                    ? 'Reload the document before saving a checkpoint.'
+                                    : undefined
+                              }
+                              onClick={openCreateCheckpoint}
+                            >
+                              + Create checkpoint
+                            </button>
+                          ) : (
+                            <form
+                              className="history-checkpoint-form"
+                              onSubmit={(event) => {
+                                event.preventDefault();
+                                void handleCreateCheckpoint();
+                              }}
+                            >
+                              <input
+                                className="path-input history-checkpoint-input"
+                                type="text"
+                                value={checkpointLabel}
+                                disabled={interactionLocked || hasPendingProposal || hasRemoteUpdate}
+                                onChange={(event) => setCheckpointLabel(event.target.value)}
+                                placeholder="Optional checkpoint name"
+                                aria-label="Checkpoint label"
+                              />
+                              <div className="history-checkpoint-actions">
+                                <button
+                                  className="quiet-inline-action history-checkpoint-cancel"
+                                  type="button"
+                                  disabled={checkpointPending}
+                                  onClick={closeCreateCheckpoint}
+                                >
+                                  Cancel
+                                </button>
+                                <button
+                                  className="primary-button compact-button action-primary-button history-save-button"
+                                  type="submit"
+                                  disabled={interactionLocked || hasPendingProposal || hasRemoteUpdate}
+                                  title={
+                                    hasPendingProposal
+                                      ? 'Resolve the pending proposal before saving a checkpoint.'
+                                      : hasRemoteUpdate
+                                        ? 'Reload the document before saving a checkpoint.'
+                                        : undefined
+                                  }
+                                >
+                                  {checkpointPending ? 'Saving…' : 'Save checkpoint'}
+                                </button>
+                              </div>
+                            </form>
+                          )}
+                        </div>
+                        {historyActionNotice ? (
+                          <p className="history-panel-note">{historyActionNotice}</p>
+                        ) : null}
+                        <div className="history-section">
+                          <div className="history-section-header">
+                            <div className="history-section-copy">
+                              <h2 id={REVISION_HISTORY_HEADING_ID} className="history-section-title">History</h2>
+                            </div>
+                            {showHistoryFilters ? (
+                            <div className="history-filter-wrap">
+                              <div className="history-filter" role="group" aria-label="History filter">
+                                <button
+                                  className={`history-filter-button${historyFilter === 'all' ? ' history-filter-button-active' : ''}`}
+                                  type="button"
+                                  aria-pressed={historyFilter === 'all'}
+                                  onClick={() => setHistoryFilter('all')}
+                                >
+                                  All
+                                </button>
+                                <button
+                                  className={`history-filter-button${historyFilter === 'manual' ? ' history-filter-button-active' : ''}`}
+                                  type="button"
+                                  aria-pressed={historyFilter === 'manual'}
+                                  onClick={() => setHistoryFilter('manual')}
+                                >
+                                  Manual
+                                </button>
+                                <button
+                                  className={`history-filter-button${historyFilter === 'auto' ? ' history-filter-button-active' : ''}`}
+                                  type="button"
+                                  aria-pressed={historyFilter === 'auto'}
+                                  onClick={() => setHistoryFilter('auto')}
+                                >
+                                  Auto
+                                </button>
+                              </div>
+                            </div>
+                            ) : null}
+                          </div>
+                          {!(selectedHistoryEntry && !selectedHistoryEntry.current) ? (
+                            <p className="history-selection-hint">Select a past checkpoint to preview that document state.</p>
+                          ) : null}
+                          {filteredHistoryEntries.length > 0 ? (
+                            <ol className="history-list" aria-label="Document history, newest first">
+                              {visibleHistoryEntries.map((entry) => {
+                                const isSelected = selectedHistoryEntry?.id === entry.id;
+                                const isPreviewSelected = isSelected && !entry.current;
+                                const metadataLabel = [
+                                  entry.timestampLabel,
+                                  entry.current ? 'Current' : entry.typeLabel,
+                                  entry.distanceLabel
+                                ].filter((value): value is string => Boolean(value)).join(' · ');
+
+                                return (
+                                  <li
+                                    key={`${entry.kind}:${entry.id}`}
+                                    aria-current={entry.current ? 'step' : undefined}
+                                    className={`history-item${isSelected ? ' history-item-selected' : ''}${isPreviewSelected ? ' history-item-preview-selected' : ''}${entry.current ? ' history-item-current' : ''}${entry.highlighted ? ' history-item-flash' : ''}`}
+                                  >
+                                    <button
+                                      className="history-item-button"
+                                      type="button"
+                                      aria-pressed={isSelected}
+                                      aria-label={`${entry.title}, ${metadataLabel}`}
+                                      onClick={() => handleSelectHistoryEntry(entry.id)}
+                                    >
+                                      <div className="history-item-main">
+                                        <div className="history-item-heading-row">
+                                          <p className="history-item-summary">{entry.title}</p>
+                                          <div className="history-item-badges">
+                                            {isPreviewSelected ? (
+                                              <span className="history-item-badge history-item-badge-viewing" aria-label="Viewing selected history item">Viewing</span>
+                                            ) : null}
+                                            {entry.current ? (
+                                              <span className="history-item-badge history-item-badge-current" aria-label="Current history item">Current</span>
+                                            ) : null}
+                                          </div>
+                                        </div>
+                                        <p className="history-item-detail">{metadataLabel}</p>
+                                      </div>
+                                    </button>
+                                    {isPreviewSelected ? (
+                                      <div className="history-item-expanded" role="group" aria-label="Selected history actions">
+                                        <button
+                                          className="secondary-button compact-button history-selection-restore"
+                                          type="button"
+                                          disabled={interactionLocked || hasPendingProposal || hasRemoteUpdate}
+                                          title={
+                                            hasPendingProposal
+                                              ? 'Resolve the pending proposal before restoring this history item.'
+                                              : hasRemoteUpdate
+                                                ? 'Reload the document before restoring history.'
+                                                : 'Restore this version as the new current document state.'
+                                          }
+                                          onClick={() => void handleRestoreSelectedHistory()}
+                                        >
+                                          Restore as current
+                                        </button>
+                                      </div>
+                                    ) : null}
+                                  </li>
+                                );
+                              })}
+                            </ol>
+                          ) : (
+                            <div className="history-empty-state">
+                              <p className="history-empty-title">
+                                {historyFilter === 'manual'
+                                  ? 'No manual checkpoints yet.'
+                                  : historyFilter === 'auto'
+                                    ? 'No auto snapshots yet.'
+                                    : 'No history yet.'}
+                              </p>
+                            </div>
+                          )}
+                          {canToggleHistoryExpansion ? (
+                            <button
+                              className="quiet-inline-action history-expand-button"
+                              type="button"
+                              onClick={() => setShowFullHistory((current) => !current)}
+                            >
+                              {showFullHistory ? 'Show fewer' : `Show ${hiddenHistoryCount} more`}
+                            </button>
+                          ) : null}
+                        </div>
+                      </section>
+                    </div>
+                  </div>
+                </aside>
+              ) : null}
 
               <aside
                 className={`discussion-rail${railOpen ? ' discussion-rail-open' : ''}`}

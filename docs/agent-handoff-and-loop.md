@@ -91,7 +91,14 @@ Workshop side:
 - resolve the document
 - open or resume a document session
 - return the correct document-first URL
+- expose a lightweight way to copy that stable URL from the document view
 - keep local path complexity out of the user-facing flow
+
+Current hosted-local seam:
+
+- `POST /api/artifact/open`
+  - input: `path`
+  - output: artifact state plus `documentUrl`, `resolvedPath`, `title`, and `resumed`
 
 ## Workshop Native Agent Loop
 

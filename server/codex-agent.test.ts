@@ -5,17 +5,20 @@ import { buildDocumentTurnPrompt, type DocumentAgentTurnInput } from './codex-ag
 
 function createInput(overrides: Partial<DocumentAgentTurnInput> = {}): DocumentAgentTurnInput {
   const activeProposalSet: ProposalSetRecord | null = overrides.activeProposalSet ?? null;
+  const focusedSection = 'focusedSection' in overrides
+    ? (overrides.focusedSection ?? null)
+    : {
+        id: 'problem',
+        headingText: 'Problem',
+        markdown: '## Problem\n\nExisting copy.\n'
+      };
 
   return {
     documentPath: 'docs/project-brief.md',
     markdown: '# Project Brief\n\n## Problem\n\nExisting copy.\n',
     prompt: 'Please continue.',
     recentComments: overrides.recentComments ?? [],
-    focusedSection: overrides.focusedSection ?? {
-      id: 'problem',
-      headingText: 'Problem',
-      markdown: '## Problem\n\nExisting copy.\n'
-    },
+    focusedSection,
     sections: overrides.sections ?? [{
       id: 'problem',
       headingText: 'Problem',
@@ -152,4 +155,13 @@ test('buildDocumentTurnPrompt includes all pending proposal items in a multi-ite
   assert.match(prompt, /Current proposal item 2 target section id: solution/);
   assert.match(prompt, /## Problem\n\nSharper problem framing\./);
   assert.match(prompt, /## Solution\n\nSharper solution framing\./);
+});
+
+test('buildDocumentTurnPrompt calls out missing focused section explicitly for document-scope turns', () => {
+  const prompt = buildDocumentTurnPrompt(createInput({
+    focusedSection: null
+  }));
+
+  assert.match(prompt, /Focused section: none/);
+  assert.doesNotMatch(prompt, /<focused_section_markdown>/);
 });

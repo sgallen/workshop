@@ -110,6 +110,19 @@ export type RevisionRecord = {
   markdown: string;
 };
 
+export type CheckpointSource = 'manual' | 'restore';
+
+export type CheckpointRecord = {
+  id: string;
+  documentId: string;
+  revisionId: string;
+  createdAt: string;
+  label: string | null;
+  summary: string;
+  source: CheckpointSource;
+  sourceCheckpointId: string | null;
+};
+
 export type AgentTurnMessage = {
   id: string;
   authorType: 'agent';
@@ -131,5 +144,6 @@ export type ProposalMutationResult = {
   latestProposalSet: ProposalSetRecord | null;
   proposalHistory: ProposalSetRecord[];
   revisions: RevisionRecord[];
+  checkpoints: CheckpointRecord[];
   appliedRevision: RevisionRecord | null;
 };

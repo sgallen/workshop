@@ -2,6 +2,7 @@ import { promises as fs } from 'node:fs';
 import path from 'node:path';
 import { sortStoredRecents } from '../core/recents/sort-stored-recents.js';
 import type {
+  CheckpointRecord,
   Comment,
   ProposalSetRecord,
   RecentArtifact,
@@ -27,6 +28,7 @@ export type Store = {
   recents?: RecentArtifact[];
   proposalSetsByDocument?: Record<string, ProposalSetRecord[]>;
   revisionsByDocument?: Record<string, RevisionRecord[]>;
+  checkpointsByDocument?: Record<string, CheckpointRecord[]>;
 };
 
 function sortComments(comments: CommentRecord[]): CommentRecord[] {
@@ -62,6 +64,10 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
       revisionsByDocument:
         candidate.revisionsByDocument && typeof candidate.revisionsByDocument === 'object'
           ? candidate.revisionsByDocument
+          : {},
+      checkpointsByDocument:
+        candidate.checkpointsByDocument && typeof candidate.checkpointsByDocument === 'object'
+          ? candidate.checkpointsByDocument
           : {}
     };
   }
@@ -149,7 +155,6 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
       artifactEntry.lastActivityAt
       || artifactEntry.lastDiscussedAt
       || artifactEntry.lastOpenedAt
-      || artifactEntry.updatedAt
       || artifactEntry.comments.length
     );
 
@@ -217,12 +222,25 @@ export function createJsonFileStore(rootDir: string, fileName = 'comments.json')
     return store.revisionsByDocument[relativePath];
   }
 
+  function getCheckpoints(store: Store, relativePath: string): CheckpointRecord[] {
+    if (!store.checkpointsByDocument) {
+      store.checkpointsByDocument = {};
+    }
+
+    if (!Array.isArray(store.checkpointsByDocument[relativePath])) {
+      store.checkpointsByDocument[relativePath] = [];
+    }
+
+    return store.checkpointsByDocument[relativePath];
+  }
+
   return {
     readStore,
     writeStore,
     getArtifactEntry,
     getProposalSets,
     getRevisions,
+    getCheckpoints,
     listRecentArtifacts,
     touchRecentArtifact,
     recordRecentDiscussion
