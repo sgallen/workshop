@@ -82,10 +82,10 @@ export function ReaderStatusBanner({
           </span>
         </p>
       ) : null}
-      {editMode ? (
+      {editMode && (hasUnsavedEditChanges || loading) ? (
         <p className="reader-review-state" role="status" aria-live="polite">
           <span className="reader-review-dot reader-review-dot-info" aria-hidden="true" />
-          <span>{hasUnsavedEditChanges ? 'Editing with unsaved changes' : 'Editing'}</span>
+          <span>{loading ? 'Saving...' : 'Unsaved changes'}</span>
         </p>
       ) : null}
       {editNotice ? (

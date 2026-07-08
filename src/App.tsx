@@ -346,7 +346,7 @@ export function App() {
   const displayedSections = displayPreviewingHistory ? previewSections ?? [] : artifact?.sections ?? [];
   const displayedDocumentTitle = artifact?.title ?? '';
   const previewHistorySummary = selectedHistoryEntry && displayPreviewingHistory
-    ? `Previewing ${selectedHistoryEntry.title} from ${selectedHistoryEntry.timestampLabel}.`
+    ? `Previewing ${selectedHistoryEntry.title} · ${selectedHistoryEntry.timestampLabel}`
     : null;
   const reviewStateLabel = activeProposalSet
     ? `${pendingProposalCount} ${pendingProposalCount === 1 ? 'change' : 'changes'}`
@@ -410,6 +410,7 @@ export function App() {
     : false;
   const interactionLocked = loading || submitting || agentTurnPending || savingEdit || creatingDocument || checkpointPending;
   const rightRailOpen = railOpen || historyOpen;
+  const neutralReaderState = !isDraftDocument && !editMode && !railOpen && !historyOpen && !displayPreviewingHistory;
   const agentConnectionState: AgentConnectionState = agentAuth?.state === 'connected'
     ? 'connected'
     : agentAuth?.state === 'connecting'
@@ -783,12 +784,6 @@ export function App() {
     });
   }, [historyEntries]);
 
-  useEffect(() => {
-    if (!historyOpen) {
-      setSelectedHistoryEntryId(historyCurrentEntry?.id ?? null);
-    }
-  }, [historyCurrentEntry, historyOpen]);
-
   async function loadArtifact(nextPath: string, options?: { preserveCurrentOnError?: boolean }) {
     const preserveCurrentOnError = options?.preserveCurrentOnError ?? false;
 
@@ -1029,6 +1024,10 @@ export function App() {
   function closeCreateCheckpoint() {
     setCreateCheckpointOpen(false);
     setCheckpointLabel('');
+  }
+
+  function handleReturnToCurrentHistory() {
+    setSelectedHistoryEntryId(historyCurrentEntry?.id ?? null);
   }
 
   async function handleRestoreSelectedHistory() {
@@ -1818,22 +1817,37 @@ export function App() {
             >
               <div className="reader-bar-row">
                 <div className="reader-bar-leading">
-                  <button
-                    className="secondary-button compact-button icon-button menu-trigger"
-                    type="button"
-                    disabled={interactionLocked}
-                    onClick={() => {
-                      setHistoryOpen(false);
-                      setRailOpen(false);
-                      setMenuOpen(true);
-                    }}
-                    aria-label="Open menu"
-                  >
-                    <span className="menu-trigger-bars" aria-hidden="true">
-                      <span />
-                      <span />
-                    </span>
-                  </button>
+                  {neutralReaderState ? (
+                    <button
+                      className="secondary-button compact-button icon-button menu-trigger"
+                      type="button"
+                      disabled={interactionLocked}
+                      onClick={() => {
+                        setHistoryOpen(false);
+                        setRailOpen(false);
+                        setMenuOpen(true);
+                      }}
+                      aria-label="Open menu"
+                    >
+                      <span className="menu-trigger-bars" aria-hidden="true">
+                        <span />
+                        <span />
+                      </span>
+                    </button>
+                  ) : editMode ? (
+                    <p className="reader-edit-label" role="status" aria-live="polite">
+                      Editing
+                    </p>
+                  ) : displayPreviewingHistory && !historyOpen ? (
+                    <button
+                      className="quiet-inline-action reader-preview-action"
+                      type="button"
+                      disabled={interactionLocked}
+                      onClick={handleReturnToCurrentHistory}
+                    >
+                      Back to current
+                    </button>
+                  ) : null}
                 </div>
                 <div className="reader-actions" role="group" aria-label="Document actions">
                   {isDraftDocument && !editMode ? (
@@ -1866,6 +1880,23 @@ export function App() {
                         {savingEdit ? (isDraftDocument ? 'Creating…' : 'Saving…') : (isDraftDocument ? 'Create' : 'Save')}
                       </button>
                     </>
+                  ) : displayPreviewingHistory && !historyOpen ? (
+                    <div className="reader-preview-actions" role="group" aria-label="Checkpoint review actions">
+                      <button
+                        className="quiet-inline-action reader-preview-action reader-preview-checkpoints"
+                        type="button"
+                        disabled={interactionLocked}
+                        aria-controls={REVISION_HISTORY_PANEL_ID}
+                        onClick={() => {
+                          setMenuOpen(false);
+                          setRailOpen(false);
+                          setHistoryOpen(true);
+                        }}
+                      >
+                        <FontAwesomeIcon icon={faClockRotateLeft} />
+                        <span>Checkpoints</span>
+                      </button>
+                    </div>
                   ) : !isDraftDocument && !railOpen && !historyOpen ? (
                     <>
                       <button
@@ -1912,7 +1943,7 @@ export function App() {
                   ) : null}
                 </div>
               </div>
-              {activeProposalSet || hasRemoteUpdate || agentTurnPending || loading || editMode || editNotice ? (
+              {activeProposalSet || hasRemoteUpdate || agentTurnPending || loading || editNotice || (editMode && (hasUnsavedEditChanges || savingEdit)) ? (
                 <ReaderStatusBanner
                   reviewStateLabel={reviewStateLabel}
                   reviewStateCanCycle={reviewStateCanCycle}
@@ -1946,12 +1977,9 @@ export function App() {
                     role="region"
                     aria-label="Manual document edit"
                   >
-                    <div className="manual-edit-meta">
-                      <p className="proposal-kicker">Edit mode</p>
-                      <p className="context-subtle">
-                        Directly edit the real Markdown source, then save it as canonical document state.
-                      </p>
-                    </div>
+                    {!isDraftDocument ? (
+                      <p className="document-filename-meta manual-edit-filename" title={displayedDocumentTitle}>{displayedDocumentTitle}</p>
+                    ) : null}
                     <textarea
                       className="manual-edit-input"
                       value={editBody}
@@ -1974,10 +2002,7 @@ export function App() {
                       <p className="document-filename-meta" title={displayedDocumentTitle}>{displayedDocumentTitle}</p>
                     ) : null}
                     {previewHistorySummary ? (
-                      <div className="history-preview-banner" role="status" aria-live="polite">
-                        <p className="history-preview-label">History preview</p>
-                        <p className="history-preview-copy">{previewHistorySummary}</p>
-                      </div>
+                      <p className="history-preview-banner" role="status" aria-live="polite">{previewHistorySummary}</p>
                     ) : null}
                     {isDraftDocument ? (
                       <div className="document-empty-state document-draft-state" role="status" aria-live="polite">
